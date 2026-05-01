@@ -134,18 +134,19 @@ def fit_garch(returns):
     ]
     
     for x0 in starts:
-        # Clipper x0 dans les bornes
-        x0_clipped = [np.clip(x0[i], bounds[i][0]+1e-9, bounds[i][1]-1e-9)
-                      for i in range(4)]
         try:
+            # Nelder-Mead sans bornes — trouve les vrais paramètres
             res = minimize(
-                neg_ll_student, x0_clipped, args=(eps,),
-                method="L-BFGS-B", bounds=bounds,
-                options={"maxiter":5000, "ftol":1e-13, "gtol":1e-10, "eps":1e-8},
+                neg_ll_student, x0, args=(eps,),
+                method="Nelder-Mead",
+                options={"maxiter":10000, "xatol":1e-8, "fatol":1e-8, "adaptive":True},
             )
-            if res.fun < best_ll:
-                best_ll  = res.fun
-                best_res = res
+            # Vérifier que les paramètres sont valides
+            w,a,b,nu = res.x
+            if w>0 and a>0 and b>0 and a+b<1 and nu>2:
+                if res.fun < best_ll:
+                    best_ll  = res.fun
+                    best_res = res
         except: pass
     
     # Dernier recours : differential evolution (global optimizer)
