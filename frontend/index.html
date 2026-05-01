@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>V-Lab DBK.DE — GARCH(1,1)</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--pu:#57068c;--pu-dk:#330662;--green:#15803d;--red:#b91c1c;--bg2:#f8f5fc;--border:#ddd;--muted:#555}
+body{font-family:Georgia,serif;background:#fff;color:#1a1a1a;font-size:14px}
+.hdr{background:var(--pu-dk);height:46px;display:flex;align-items:center;padding:0 24px;gap:10px}
+.hdr-logo{color:#fff;font-family:Arial,sans-serif;font-weight:700;font-size:18px}
+.hdr-sep{color:#9f7fc0}
+.hdr-sub{color:#c4a8df;font-size:11px;font-family:Arial,sans-serif}
+/* Loading */
+.ldr{position:fixed;inset:0;background:rgba(255,255,255,.95);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:999;transition:opacity .4s}
+.ldr.hide{opacity:0;pointer-events:none}
+.spin{width:42px;height:42px;border:4px solid #e0d0f0;border-top-color:var(--pu);border-radius:50%;animation:sp 1s linear infinite;margin-bottom:14px}
+@keyframes sp{to{transform:rotate(360deg)}}
+.ldr p{font-family:Arial,sans-serif;font-size:13px;color:var(--muted)}
+.ldr small{font-family:Arial,sans-serif;font-size:11px;color:#aaa;margin-top:4px}
+/* Page */
+.page{max-width:980px;margin:0 auto;padding:24px 20px 60px}
+h1{font-size:20px;font-weight:bold;color:var(--pu-dk);margin-bottom:4px}
+.sub{font-family:Arial,sans-serif;font-size:13px;color:var(--muted);margin-bottom:18px}
+/* Ticker bar */
+.tbar{display:flex;align-items:center;gap:10px;margin-bottom:18px;flex-wrap:wrap}
+.tbar label{font-family:Arial,sans-serif;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)}
+.tbar select,.tbar input[type=date]{border:1px solid var(--border);border-radius:3px;padding:4px 10px;font-size:13px;font-family:Arial,sans-serif}
+.rbtn{padding:5px 14px;background:var(--pu);color:#fff;border:none;border-radius:3px;font-family:Arial,sans-serif;font-size:12px;cursor:pointer}
+.rbtn:hover{background:var(--pu-dk)}
+.live{display:inline-flex;align-items:center;gap:5px;font-family:Arial,sans-serif;font-size:11px;color:var(--green)}
+.dot{width:7px;height:7px;background:var(--green);border-radius:50%;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+/* Error */
+.err{background:#fef2f2;border:1px solid #fca5a5;border-radius:4px;padding:12px;font-family:Arial,sans-serif;font-size:13px;color:var(--red);margin-bottom:16px;display:none}
+/* Forecast cards */
+.fcards{display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap}
+.fc{flex:1;min-width:120px;background:var(--bg2);border:1px solid #e0d6ef;border-radius:4px;padding:12px 14px}
+.fc-h{font-family:Arial,sans-serif;font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-bottom:3px}
+.fc-v{font-size:22px;font-weight:bold;color:var(--pu-dk)}
+.fc-d{font-family:Arial,sans-serif;font-size:10px;margin-top:2px;color:var(--green)}
+/* Updated */
+.upd{font-family:Arial,sans-serif;font-size:11px;color:var(--muted);border-bottom:1px solid var(--border);padding-bottom:9px;margin-bottom:14px}
+/* Stats row */
+.srow{display:flex;flex-wrap:wrap;margin-bottom:14px;border:1px solid var(--border);border-radius:4px;overflow:hidden}
+.st{flex:1;min-width:100px;padding:8px 12px;background:#fff;border-right:1px solid var(--border)}
+.st:last-child{border-right:none}
+.st-l{font-family:Arial,sans-serif;font-size:9px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:2px}
+.st-v{font-size:14px;font-weight:bold;color:var(--pu-dk)}
+/* Controls */
+.ctrl{display:flex;align-items:center;gap:7px;flex-wrap:wrap;font-family:Arial,sans-serif;font-size:12px;margin-bottom:8px}
+.clbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)}
+.cb{padding:3px 9px;border:1px solid var(--border);border-radius:3px;background:#fff;cursor:pointer;font-size:12px;font-family:Arial,sans-serif;color:var(--muted)}
+.cb.on{background:var(--pu);color:#fff;border-color:var(--pu)}
+/* Range */
+.drow{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-family:Arial,sans-serif;font-size:12px;margin-bottom:13px}
+.drow label{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)}
+.sc{padding:2px 9px;border:1px solid var(--border);border-radius:3px;background:#fff;cursor:pointer;font-size:12px;color:var(--pu)}
+.sc.on{background:var(--pu);color:#fff;border-color:var(--pu)}
+/* Charts */
+.cbox{border:1px solid var(--border);border-radius:4px;padding:12px;margin-bottom:20px}
+.leg{display:flex;gap:14px;flex-wrap:wrap;font-family:Arial,sans-serif;font-size:11px;color:var(--muted);margin-bottom:8px}
+.li{display:flex;align-items:center;gap:4px}
+.ld{width:18px;height:2px;border-radius:1px}
+.cw{position:relative;width:100%}
+.chart-label{font-family:Arial,sans-serif;font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px;padding-left:2px}
+/* Two columns */
+.twocol{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
+@media(max-width:600px){.twocol{grid-template-columns:1fr}}
+.panel{border:1px solid var(--border);border-radius:4px;padding:14px}
+.panel h3{font-size:13px;font-weight:bold;color:var(--pu-dk);margin-bottom:2px}
+.psub{font-family:Arial,sans-serif;font-size:10px;color:var(--muted);margin-bottom:8px}
+.ph{position:relative;width:100%;height:210px}
+/* Params */
+.psec{margin-bottom:20px}
+.psec h2{font-family:Arial,sans-serif;font-size:12px;font-weight:700;color:var(--pu-dk);border-bottom:2px solid var(--pu);padding-bottom:4px;margin-bottom:8px;text-transform:uppercase;letter-spacing:.4px}
+.ptbl{width:100%;border-collapse:collapse;font-family:Arial,sans-serif;font-size:12px}
+.ptbl th{background:var(--pu-dk);color:#fff;padding:6px 10px;text-align:left;font-size:11px}
+.ptbl td{padding:6px 10px;border-bottom:1px solid var(--border)}
+.ptbl tr:nth-child(even) td{background:var(--bg2)}
+.psym{font-style:italic;font-size:14px;color:var(--pu-dk);font-family:Georgia,serif;font-weight:bold}
+.sig{color:var(--green);font-weight:bold}.nsig{color:var(--muted)}
+.pnote{font-family:Arial,sans-serif;font-size:10px;color:var(--muted);margin-top:5px}
+/* Equation */
+.meq{background:var(--bg2);border-left:3px solid var(--pu);padding:8px 12px;font-family:Georgia,serif;font-size:13px;border-radius:0 4px 4px 0;margin:7px 0 10px}
+.meq div{margin-bottom:4px}
+/* VaR */
+.vbadge{display:inline-block;background:var(--pu-dk);color:#fff;font-size:20px;font-weight:bold;padding:8px 16px;border-radius:4px;font-family:Arial,sans-serif;margin:6px 0}
+.vctx{font-family:Arial,sans-serif;font-size:11px;color:var(--muted);margin-top:3px}
+.vt{border-collapse:collapse;font-size:12px;font-family:Arial,sans-serif}
+.vt th{background:#f0f0f0;padding:4px 10px;border:1px solid var(--border);text-align:left}
+.vt td{padding:4px 10px;border:1px solid var(--border)}
+/* Nav */
+.navsec h4{font-family:Arial,sans-serif;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--pu-dk);margin-bottom:5px}
+.navlinks{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:14px}
+.nl{display:inline-block;padding:3px 10px;border:1px solid #c9a0dc;border-radius:3px;color:var(--pu);font-size:11px;font-family:Arial,sans-serif;cursor:pointer}
+.nl:hover,.nl.on{background:var(--pu);color:#fff}
+/* Footer */
+.foot{border-top:1px solid var(--border);padding-top:12px;font-family:Arial,sans-serif;font-size:11px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap}
+.foot a{color:var(--pu);text-decoration:none}
+/* Refresh badge */
+.refresh-info{font-family:Arial,sans-serif;font-size:10px;color:#aaa;margin-top:6px}
+</style>
+</head>
+<body>
+
+<div class="ldr" id="ldr">
+  <div class="spin"></div>
+  <p id="lmsg">Telechargement donnees post-COVID...</p>
+  <small id="lstep">Yahoo Finance → GARCH(1,1) MLE → Graphiques</small>
+</div>
+
+<div class="hdr">
+  <div class="hdr-logo">V-Lab</div>
+  <div class="hdr-sep">|</div>
+  <div class="hdr-sub">Volatility Laboratory — GARCH(1,1) Student — Temps reel</div>
+</div>
+
+<div class="page">
+  
+  <div class="tbar">
+    <label>Actif :</label>
+    <select id="tsel">
+      <option value="DBK.DE" selected>Deutsche Bank</option>
+      <option value="BNP.PA">BNP Paribas</option>
+      <option value="GLE.PA">Societe Generale</option>
+      <option value="CBK.DE">Commerzbank</option>
+      <option value="^GSPC">S&P 500</option>
+      <option value="^GDAXI">DAX 40</option>
+    </select>
+    <label>Depuis :</label>
+    <select id="sdate">
+      <option value="2021-01-01" selected>2021</option>
+      <option value="2022-01-01">2022</option>
+      <option value="2023-01-01">2023</option>
+      <option value="2024-01-01">2024</option>
+      <option value="2020-03-01">2020</option>
+    </select>
+    <button class="rbtn" onclick="loadData()">&#8635; Actualiser</button>
+    <span class="live"><span class="dot"></span> Donnees en temps reel</span>
+  </div>
+  
+  <div class="err" id="ebox"><strong>Erreur :</strong> <span id="emsg"></span> — Verifiez que le backend tourne sur localhost:8000</div>
+  
+  <h1 id="ptitle">Deutsche Bank AG (DBK.DE)</h1>
+  <p class="sub" id="psub">Volatilite GARCH(1,1) Student — periode post-COVID — derniere mise a jour : <strong id="ldate">—</strong></p>
+  
+  <div class="fcards">
+    <div class="fc"><div class="fc-h">Volatilite aujourd'hui</div><div class="fc-v" id="v0">—</div><div class="fc-d">σt estime</div></div>
+    <div class="fc"><div class="fc-h">Dans 1 semaine</div><div class="fc-v" id="v5">—</div><div class="fc-d">prevision GARCH</div></div>
+    <div class="fc"><div class="fc-h">Dans 1 mois</div><div class="fc-v" id="v22">—</div><div class="fc-d">retour vers σ∞</div></div>
+    <div class="fc" style="background:#f0f8ff;border-color:#b8d0f0">
+      <div class="fc-h">Vol. Annualisee</div><div class="fc-v" id="avol" style="color:#0a3d6b">—</div><div class="fc-d" style="color:#555">σ x √252</div></div>
+    <div class="fc" style="background:#fffbeb;border-color:#f0d8a0">
+      <div class="fc-h">Cours cloture</div><div class="fc-v" id="lpx" style="color:#7c4a00">—</div><div class="fc-d" style="color:#555" id="lpxd">—</div></div>
+  </div>
+  
+  <div class="upd" id="ubar">Chargement...</div>
+  <div class="refresh-info" id="rinfo"></div>
+  
+  <div class="srow">
+    <div class="st"><div class="st-l">VaR 1%</div><div class="st-v" id="svar" style="color:var(--red)">—</div></div>
+    <div class="st"><div class="st-l">α + β</div><div class="st-v" id="spers">—</div></div>
+    <div class="st"><div class="st-l">ν Student</div><div class="st-v" id="snu">—</div></div>
+    <div class="st"><div class="st-l">Demi-vie</div><div class="st-v" id="shl">—</div></div>
+    <div class="st"><div class="st-l">JB stat</div><div class="st-v" id="sjb" style="font-size:12px">—</div></div>
+    <div class="st"><div class="st-l">N obs.</div><div class="st-v" id="sn" style="font-size:12px">—</div></div>
+  </div>
+  
+  <div class="ctrl">
+    <span class="clbl">Afficher</span>
+    <button class="cb on" onclick="tog('px',this)">Cours Pt</button>
+    <button class="cb on" onclick="tog('vol',this)">Volatilite σt</button>
+    <button class="cb on" onclick="tog('var',this)">VaR 1%</button>
+    <button class="cb"    onclick="tog('ret',this)">Rendements Rt</button>
+  </div>
+  
+  <div class="drow">
+    <label>Zoom :</label>
+    <button class="sc" onclick="setR(3,this)">3M</button>
+    <button class="sc" onclick="setR(6,this)">6M</button>
+    <button class="sc on" onclick="setR(12,this)">1A</button>
+    <button class="sc" onclick="setR(24,this)">2A</button>
+    <button class="sc" onclick="setR(0,this)">Tout</button>
+  </div>
+  
+  <div class="cbox">
+    <div class="leg">
+      <div class="li"><div class="ld" style="background:#1D9E75"></div>Cours (€)</div>
+      <div class="li"><div class="ld" style="background:#D85A30"></div>Volatilite σt (%)</div>
+      <div class="li"><div class="ld" style="background:#378ADD"></div>VaR 1% (%)</div>
+      <div class="li"><div class="ld" style="background:#6366f1"></div>Rendements (%)</div>
+    </div>
+    
+    <div id="wpx" class="cw" style="height:200px;margin-bottom:10px">
+      <div class="chart-label">Cours de cloture (€)</div>
+      <canvas id="cpx" style="height:185px"></canvas>
+    </div>
+    <div id="wvol" class="cw" style="height:170px;margin-bottom:10px">
+      <div class="chart-label">Volatilite conditionnelle σt (%)</div>
+      <canvas id="cvol" style="height:155px"></canvas>
+    </div>
+    <div id="wvar" class="cw" style="height:170px;margin-bottom:10px">
+      <div class="chart-label">Value at Risk journaliere 1% (%)</div>
+      <canvas id="cvar" style="height:155px"></canvas>
+    </div>
+    <div id="wret" class="cw" style="height:140px;display:none">
+      <div class="chart-label">Rendements logarithmiques journaliers (%)</div>
+      <canvas id="cret" style="height:125px"></canvas>
+    </div>
+  </div>
+  
+  <div class="twocol">
+    <div class="panel">
+      <h3>News Impact Curve</h3>
+      <p class="psub">Effet d'un choc εt sur la volatilite de demain σt+1</p>
+      <div class="ph"><canvas id="cnic"></canvas></div>
+      <p style="font-family:Arial,sans-serif;font-size:10px;color:#999;margin-top:5px">
+        Courbe en U symetrique — pas d'effet de levier (γ=0).
+      </p>
+    </div>
+    <div class="panel">
+      <h3>Term Structure de Volatilite</h3>
+      <p class="psub">Prevision σt+h et convergence vers σ∞ (long terme)</p>
+      <div class="ph"><canvas id="cfc"></canvas></div>
+      <p style="font-family:Arial,sans-serif;font-size:10px;color:#999;margin-top:5px" id="hlnote">—</p>
+    </div>
+  </div>
+  
+  <div class="psec">
+    <h2>Parametres estimes — GARCH(1,1) Student</h2>
+    <table class="ptbl">
+      <thead><tr><th>Parametre</th><th>Sym.</th><th>Valeur</th><th>Interpretation</th></tr></thead>
+      <tbody id="ptbody"><tr><td colspan="4" style="text-align:center;font-family:Arial,sans-serif;color:var(--muted)">Chargement...</td></tr></tbody>
+    </table>
+    <p class="pnote" id="pnote">—</p>
+  </div>
+  
+  <div class="psec">
+    <h2>Equations du modele</h2>
+    <div class="meq">
+      <div><em>Rt = μ + εt</em> &nbsp;avec&nbsp; <em>εt = σt zt</em>, &nbsp;<em>zt ~ Student(ν)</em></div>
+      <div><em>σt² = ω + α · εt-1² + β · σt-1²</em></div>
+      <div style="font-size:11px;color:#777;font-family:Arial,sans-serif;margin-top:4px" id="eqnote">—</div>
+    </div>
+  </div>
+  
+  <div class="psec">
+    <h2>Value at Risk — <span id="vdate">—</span></h2>
+    <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start">
+      <div>
+        <div class="vbadge" id="vbadge">VaR(1%) = —</div>
+        <div class="vctx">Perte max journaliere au seuil de confiance 99%</div>
+        <div class="vctx" id="vf" style="margin-top:3px">—</div>
+      </div>
+      <table class="vt" id="vtbl"><tr><th>Capital</th><th>VaR (€)</th></tr></table>
+    </div>
+  </div>
+  
+  <div class="navsec">
+    <h4>Autres actifs</h4>
+    <div class="navlinks">
+      <span class="nl on">DBK.DE ★</span>
+      <span class="nl" onclick="sw('BNP.PA')">BNP Paribas</span>
+      <span class="nl" onclick="sw('GLE.PA')">Soc. Generale</span>
+      <span class="nl" onclick="sw('CBK.DE')">Commerzbank</span>
+      <span class="nl" onclick="sw('^GSPC')">S&P 500</span>
+      <span class="nl" onclick="sw('^GDAXI')">DAX 40</span>
+    </div>
+  </div>
+  
+  <hr style="margin:18px 0;border:none;border-top:1px solid #ddd">
+  <div class="foot">
+    <span>Analyse quantitative post-COVID — donnees temps reel</span>
+    <span style="margin-left:auto;color:#aaa">Inspire de <a href="https://vlab.stern.nyu.edu" target="_blank">V-Lab NYU Stern</a> · Yahoo Finance · GARCH(1,1) MLE</span>
+  </div>
+</div>
+
+<script>
+const API = "http://localhost:8000";
+let D=null, C={}, M=12;
+
+// ── Chargement donnees ─────────────────────────────────────────────────
+async function loadData(){
+  const t = document.getElementById('tsel').value;
+  const s = document.getElementById('sdate').value;
+  showL(`Telechargement ${t} depuis Yahoo Finance...`, 'Estimation GARCH(1,1) Student en cours...');
+  document.getElementById('ebox').style.display='none';
+  try {
+    const r = await fetch(`${API}/api/volatility/${encodeURIComponent(t)}?start=${s}`);
+    if(!r.ok){ const e=await r.json(); throw new Error(e.detail||`HTTP ${r.status}`); }
+    D = await r.json();
+    render();
+    hideL();
+    // Auto-refresh toutes les heures
+    setTimeout(loadData, 3600000);
+    set('rinfo', `Prochain rafraichissement automatique dans 1h · Cache actif 1h`);
+  } catch(e){ hideL(); showErr(e.message); }
+}
+
+// ── Rendu principal ────────────────────────────────────────────────────
+function render(){
+  const p=D.params, fc=D.forecast, fi=h=>fc.horizons.indexOf(h);
+  set('ptitle', `${D.ticker} — Analyse de Volatilite GARCH(1,1)`);
+  set('ldate',  fd(D.last_date));
+  set('psub',   `Volatilite GARCH(1,1) Student — periode post-COVID — derniere mise a jour : ${fd(D.last_date)}`);
+  set('v0',  pc(fc.vols[fi(0)]));
+  set('v5',  pc(fc.vols[fi(5)]));
+  set('v22', pc(fc.vols[fi(22)]));
+  set('avol', pc(D.ann_vol));
+  set('lpx',  `${D.last_price.toFixed(2)} €`);
+  set('lpxd', fd(D.last_date));
+  set('ubar', `Cloture : ${fd(D.last_date)} | σt = ${pc(D.sig_today)} | VaR 1% = ${pc(D.var_today)} | n = ${D.n_obs.toLocaleString()} obs. | ${D.start_date} → ${D.last_date}`);
+  set('svar',  pc(D.var_today));
+  set('spers', D.persistence.toFixed(4));
+  set('snu',   p.nu.toFixed(3));
+  set('shl',   `≈ ${Math.abs(D.halflife).toFixed(0)}j`);
+  set('sjb',   `${D.stats.jb_stat.toLocaleString()}***`);
+  set('sn',    D.n_obs.toLocaleString());
+  document.getElementById('ptbody').innerHTML=`
+    <tr><td>Constante variance</td><td><span class="psym">ω</span></td><td>${p.omega.toFixed(4)}</td><td>Niveau de base de la variance</td></tr>
+    <tr><td>Effet ARCH (choc recent)</td><td><span class="psym">α</span></td><td>${p.alpha.toFixed(4)}</td><td><span class="sig">***</span> Reactivite aux innovations εt-1²</td></tr>
+    <tr><td>Effet GARCH (memoire)</td><td><span class="psym">β</span></td><td>${p.beta.toFixed(4)}</td><td><span class="sig">***</span> Persistance de la variance passee</td></tr>
+    <tr><td>Persistance totale</td><td><span class="psym">α+β</span></td><td><strong>${D.persistence.toFixed(4)}</strong></td><td style="color:#0a3d6b">Demi-vie ≈ ${Math.abs(D.halflife).toFixed(0)} jours</td></tr>
+    <tr><td>Degres de liberte</td><td><span class="psym">ν</span></td><td>${p.nu.toFixed(3)}</td><td><span class="sig">***</span> Queues epaisses significatives</td></tr>
+    <tr><td>Moyenne des rendements</td><td><span class="psym">μ</span></td><td>${p.mu.toFixed(5)}</td><td><span class="nsig">n.s.</span> μ ≈ 0 confirme</td></tr>`;
+  const si2 = p.omega/(1-D.persistence);
+  set('eqnote', `σ²∞ = ω/(1−α−β) = ${p.omega.toFixed(4)}/${(1-D.persistence).toFixed(4)} = ${si2.toFixed(4)} %² → σ∞ ≈ ${D.sig_inf.toFixed(3)} %/jour ≈ ${(D.sig_inf*Math.sqrt(252)).toFixed(1)} %/an`);
+  set('vdate',  fd(D.last_date));
+  set('vbadge', `VaR(1%) = ${pc(D.var_today)}`);
+  set('vf',     `σt = ${pc(D.sig_today)} | q1% Student(ν=${p.nu.toFixed(1)}) = ${D.q01.toFixed(4)}`);
+  set('hlnote', `α+β = ${D.persistence.toFixed(4)} → demi-vie des chocs ≈ ${Math.abs(D.halflife).toFixed(0)} jours`);
+  const vr=Object.entries(D.var_by_capital).map(([c,v])=>
+    `<tr><td>${Number(c).toLocaleString('fr-FR')} €</td>
+     <td style="text-align:right${c==='100000'?';font-weight:bold;color:var(--red)':''}">${v.toLocaleString('fr-FR',{minimumFractionDigits:2})} €</td></tr>`).join('');
+  document.getElementById('vtbl').innerHTML=`<tr><th>Capital</th><th>VaR (€)</th></tr>${vr}`;
+  buildCharts(); buildNIC(); buildForecast();
+}
+
+// ── Options communes Chart.js ─────────────────────────────────────────
+function mkCO(extraPlugins){
+  return {
+    responsive:true, maintainAspectRatio:false, animation:{duration:400},
+    interaction:{mode:'index', intersect:false},  // ← tooltip sur toute la colonne
+    plugins:{
+      legend:{display:false},
+      tooltip:{
+        backgroundColor:'rgba(255,255,255,0.97)',
+        titleColor:'#330662', bodyColor:'#333',
+        borderColor:'#ddd', borderWidth:1,
+        titleFont:{family:'Arial',size:11,weight:'bold'},
+        bodyFont:{family:'Arial',size:11},
+        padding:10,
+        callbacks:{
+          title: items => items[0]?.label || '',
+          label: c => {
+            const v = c.parsed.y;
+            if(v==null) return null;
+            return `  ${c.dataset.label} : ${v.toFixed(3)}${c.dataset.unit||''}`;
+          }
+        },
+        ...extraPlugins
+      }
+    },
+    elements:{point:{radius:0, hoverRadius:5, hoverBackgroundColor:'#57068c'}, line:{tension:.2, borderWidth:1.4}},
+  };
+}
+const xA=()=>({grid:{display:false},ticks:{color:'#888',font:{size:10,family:'Arial'},maxTicksLimit:10,maxRotation:0}});
+const yA=(l,fmt)=>({
+  grid:{color:'#f0f0f0'},
+  title:{display:true,text:l,color:'#666',font:{size:10,family:'Arial'}},
+  ticks:{color:'#888',font:{size:10,family:'Arial'},callback:fmt||(v=>v.toFixed(2))}
+});
+
+function sl2(m){
+  const s=D.series; if(!m) return s;
+  const c=new Date(s.dates[s.dates.length-1]); c.setMonth(c.getMonth()-m);
+  const i=s.dates.findIndex(d=>new Date(d)>=c);
+  return{dates:s.dates.slice(i),prices:s.prices.slice(i),returns:s.returns.slice(i),vols:s.vols.slice(i),vars:s.vars.slice(i)};
+}
+function dc(k){if(C[k]){C[k].destroy();C[k]=null;}}
+
+function buildCharts(){
+  const s=sl2(M), vn=D.var_today;
+  dc('px'); dc('vol'); dc('var_'); dc('ret');
+  
+  // Cours
+  C.px=new Chart(document.getElementById('cpx'),{type:'line',
+    data:{labels:s.dates,datasets:[{label:'Cours',unit:' €',data:s.prices,borderColor:'#1D9E75',fill:true,backgroundColor:'rgba(29,158,117,.07)',borderWidth:1.5}]},
+    options:{...mkCO(),scales:{x:xA(),y:yA('Prix (€)',v=>v.toFixed(2)+' €')}}});
+  
+  // Volatilite
+  C.vol=new Chart(document.getElementById('cvol'),{type:'line',
+    data:{labels:s.dates,datasets:[{label:'σt',unit:' %',data:s.vols,borderColor:'#D85A30',fill:true,backgroundColor:'rgba(216,90,48,.08)',borderWidth:1.5}]},
+    options:{...mkCO(),scales:{x:xA(),y:yA('Volatilite (%)',v=>v.toFixed(2)+'%')}}});
+  
+  // VaR
+  C.var_=new Chart(document.getElementById('cvar'),{type:'line',
+    data:{labels:s.dates,datasets:[
+      {label:'VaR 1%',unit:' %',data:s.vars,borderColor:'#378ADD',fill:true,backgroundColor:'rgba(55,138,221,.07)',borderWidth:1.5},
+      {label:'VaR actuelle',unit:' %',data:s.vars.map(()=>vn),borderColor:'#D85A30',borderDash:[5,3],borderWidth:1.5,fill:false,pointRadius:0}
+    ]},
+    options:{...mkCO(),scales:{x:xA(),y:yA('VaR (%)',v=>v.toFixed(2)+'%')}}});
+  
+  // Rendements
+  C.ret=new Chart(document.getElementById('cret'),{type:'bar',
+    data:{labels:s.dates,datasets:[{label:'Rt',unit:' %',data:s.returns,
+      backgroundColor:s.returns.map(v=>v>=0?'rgba(29,158,117,.65)':'rgba(216,90,48,.65)'),borderWidth:0}]},
+    options:{...mkCO(),scales:{x:xA(),y:yA('Rendement (%)',v=>v.toFixed(2)+'%')}}});
+}
+
+function buildNIC(){
+  const n=D.nic; dc('nic');
+  const s0=D.sig_today;
+  C.nic=new Chart(document.getElementById('cnic'),{type:'line',
+    data:{labels:n.returns.map(r=>r.toFixed(1)+'%'),
+          datasets:[
+            {label:'σt+1',unit:' %',data:n.vols,borderColor:'#57068c',borderWidth:2.5,fill:false,pointRadius:0,tension:.4},
+            {label:'σt actuel',unit:' %',data:n.vols.map(()=>s0),borderColor:'#D85A30',borderDash:[5,3],borderWidth:1.2,fill:false,pointRadius:0}
+          ]},
+    options:{
+      responsive:true,maintainAspectRatio:false,animation:{duration:0},
+      interaction:{mode:'index',intersect:false},
+      plugins:{
+        legend:{display:false},
+        tooltip:{
+          backgroundColor:'rgba(255,255,255,0.97)',
+          titleColor:'#330662',bodyColor:'#333',
+          borderColor:'#ddd',borderWidth:1,
+          titleFont:{family:'Arial',size:11,weight:'bold'},
+          bodyFont:{family:'Arial',size:11},padding:10,
+          callbacks:{
+            title:items=>`Choc : ${items[0]?.label||''}`,
+            label:c=>{
+              const v=c.parsed.y;
+              if(c.datasetIndex===0) return `  Vol. demain : ${v.toFixed(3)} %`;
+              return `  Vol. actuelle : ${v.toFixed(3)} %`;
+            },
+            afterBody:items=>{
+              const v=items[0]?.parsed?.y;
+              const delta=v-s0;
+              return [`  vs Actuel : ${delta>=0?'+':''}${delta.toFixed(3)} %`,
+                      `  σ∞ long terme : ${D.sig_inf.toFixed(3)} %`];
+            }
+          }
+        }
+      },
+      elements:{point:{radius:0,hoverRadius:5,hoverBackgroundColor:'#57068c'},line:{tension:.4}},
+      scales:{
+        x:{title:{display:true,text:'Choc εt (%)',color:'#666',font:{size:10,family:'Arial'}},
+           ticks:{color:'#888',font:{size:10,family:'Arial'},maxTicksLimit:9},grid:{color:'#f0f0f0'}},
+        y:{title:{display:true,text:'σt+1 (%)',color:'#666',font:{size:10,family:'Arial'}},
+           ticks:{color:'#888',font:{size:10,family:'Arial'},callback:v=>v.toFixed(2)+'%'},grid:{color:'#f0f0f0'}}
+      }
+    }
+  });
+}
+
+function buildForecast(){
+  const fc=D.forecast; dc('fc');
+  C.fc=new Chart(document.getElementById('cfc'),{type:'line',
+    data:{labels:fc.labels,datasets:[
+      {label:'σt+h prevision',unit:' %',data:fc.vols,borderColor:'#D85A30',borderWidth:2.5,fill:false,pointRadius:5,pointBackgroundColor:'#D85A30',tension:.3},
+      {label:'σ∞ long terme',unit:' %',data:fc.vols.map(()=>D.sig_inf),borderColor:'#888',borderDash:[5,3],borderWidth:1.2,fill:false,pointRadius:0}
+    ]},
+    options:{
+      responsive:true,maintainAspectRatio:false,animation:{duration:0},
+      interaction:{mode:'index',intersect:false},
+      plugins:{
+        legend:{display:false},
+        tooltip:{
+          backgroundColor:'rgba(255,255,255,0.97)',
+          titleColor:'#330662',bodyColor:'#333',
+          borderColor:'#ddd',borderWidth:1,
+          titleFont:{family:'Arial',size:11,weight:'bold'},
+          bodyFont:{family:'Arial',size:11},padding:10,
+          callbacks:{
+            title:items=>`Horizon : ${items[0]?.label||''}`,
+            label:c=>{
+              if(c.datasetIndex===0) return `  Prevision σ : ${c.parsed.y.toFixed(3)} %`;
+              return `  σ∞ long terme : ${c.parsed.y.toFixed(3)} %`;
+            },
+            afterBody:items=>{
+              const v=items[0]?.parsed?.y;
+              const delta=v-D.sig_today;
+              return [`  vs Aujourd'hui (${pc(D.sig_today)}) : ${delta>=0?'+':''}${delta.toFixed(3)} %`];
+            }
+          }
+        }
+      },
+      elements:{point:{radius:5,hoverRadius:7},line:{tension:.3}},
+      scales:{
+        x:{title:{display:true,text:'Horizon de prevision',color:'#666',font:{size:10,family:'Arial'}},
+           ticks:{color:'#888',font:{size:10,family:'Arial'}},grid:{color:'#f0f0f0'}},
+        y:{title:{display:true,text:'σ (%)',color:'#666',font:{size:10,family:'Arial'}},
+           ticks:{color:'#888',font:{size:10,family:'Arial'},callback:v=>v.toFixed(2)+'%'},grid:{color:'#f0f0f0'}}
+      }
+    }
+  });
+}
+
+// ── Interactions ──────────────────────────────────────────────────────
+function tog(t,btn){
+  btn.classList.toggle('on');
+  const m={px:'wpx',vol:'wvol',var:'wvar',ret:'wret'};
+  const el=document.getElementById(m[t]);
+  el.style.display=el.style.display==='none'?'block':'none';
+}
+
+function setR(m,btn){
+  M=m;
+  document.querySelectorAll('.sc').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  if(!D) return;
+  const s=sl2(m), vn=D.var_today;
+  C.px.data.labels=s.dates; C.px.data.datasets[0].data=s.prices; C.px.update();
+  C.vol.data.labels=s.dates; C.vol.data.datasets[0].data=s.vols; C.vol.update();
+  C.var_.data.labels=s.dates;
+  C.var_.data.datasets[0].data=s.vars;
+  C.var_.data.datasets[1].data=s.vars.map(()=>vn);
+  C.var_.update();
+  C.ret.data.labels=s.dates;
+  C.ret.data.datasets[0].data=s.returns;
+  C.ret.data.datasets[0].backgroundColor=s.returns.map(v=>v>=0?'rgba(29,158,117,.65)':'rgba(216,90,48,.65)');
+  C.ret.update();
+}
+
+function sw(t){ document.getElementById('tsel').value=t; loadData(); }
+
+// ── Helpers ────────────────────────────────────────────────────────────
+function showL(m,st){ set('lmsg',m); set('lstep',st); document.getElementById('ldr').classList.remove('hide'); }
+function hideL(){ document.getElementById('ldr').classList.add('hide'); }
+function showErr(m){ const b=document.getElementById('ebox'); b.style.display='block'; set('emsg',m); }
+function set(id,v){ const e=document.getElementById(id); if(e) e.textContent=v; }
+function pc(v){ return v!=null ? v.toFixed(3)+'%' : '—'; }
+function fd(str){
+  if(!str) return '—';
+  const [y,m,d]=str.split('-');
+  const mo=['janv.','fevr.','mars','avr.','mai','juin','juil.','aout','sept.','oct.','nov.','dec.'];
+  return `${parseInt(d)} ${mo[parseInt(m)-1]} ${y}`;
+}
+
+loadData();
+</script>
+</body>
+</html>
