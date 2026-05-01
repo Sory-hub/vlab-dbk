@@ -1,543 +1,984 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>V-Lab DBK.DE — GARCH(1,1)</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>V-Lab · Deutsche Bank Volatility Monitor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <style>
-*{box-sizing:border-box;margin:0;padding:0}
-:root{--pu:#57068c;--pu-dk:#330662;--green:#15803d;--red:#b91c1c;--bg2:#f8f5fc;--border:#ddd;--muted:#555}
-body{font-family:Georgia,serif;background:#fff;color:#1a1a1a;font-size:14px}
-.hdr{background:var(--pu-dk);height:46px;display:flex;align-items:center;padding:0 24px;gap:10px}
-.hdr-logo{color:#fff;font-family:Arial,sans-serif;font-weight:700;font-size:18px}
-.hdr-sep{color:#9f7fc0}
-.hdr-sub{color:#c4a8df;font-size:11px;font-family:Arial,sans-serif}
-/* Loading */
-.ldr{position:fixed;inset:0;background:rgba(255,255,255,.95);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:999;transition:opacity .4s}
-.ldr.hide{opacity:0;pointer-events:none}
-.spin{width:42px;height:42px;border:4px solid #e0d0f0;border-top-color:var(--pu);border-radius:50%;animation:sp 1s linear infinite;margin-bottom:14px}
-@keyframes sp{to{transform:rotate(360deg)}}
-.ldr p{font-family:Arial,sans-serif;font-size:13px;color:var(--muted)}
-.ldr small{font-family:Arial,sans-serif;font-size:11px;color:#aaa;margin-top:4px}
-/* Page */
-.page{max-width:980px;margin:0 auto;padding:24px 20px 60px}
-h1{font-size:20px;font-weight:bold;color:var(--pu-dk);margin-bottom:4px}
-.sub{font-family:Arial,sans-serif;font-size:13px;color:var(--muted);margin-bottom:18px}
-/* Ticker bar */
-.tbar{display:flex;align-items:center;gap:10px;margin-bottom:18px;flex-wrap:wrap}
-.tbar label{font-family:Arial,sans-serif;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)}
-.tbar select,.tbar input[type=date]{border:1px solid var(--border);border-radius:3px;padding:4px 10px;font-size:13px;font-family:Arial,sans-serif}
-.rbtn{padding:5px 14px;background:var(--pu);color:#fff;border:none;border-radius:3px;font-family:Arial,sans-serif;font-size:12px;cursor:pointer}
-.rbtn:hover{background:var(--pu-dk)}
-.live{display:inline-flex;align-items:center;gap:5px;font-family:Arial,sans-serif;font-size:11px;color:var(--green)}
-.dot{width:7px;height:7px;background:var(--green);border-radius:50%;animation:pulse 2s infinite}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
-/* Error */
-.err{background:#fef2f2;border:1px solid #fca5a5;border-radius:4px;padding:12px;font-family:Arial,sans-serif;font-size:13px;color:var(--red);margin-bottom:16px;display:none}
-/* Forecast cards */
-.fcards{display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap}
-.fc{flex:1;min-width:120px;background:var(--bg2);border:1px solid #e0d6ef;border-radius:4px;padding:12px 14px}
-.fc-h{font-family:Arial,sans-serif;font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-bottom:3px}
-.fc-v{font-size:22px;font-weight:bold;color:var(--pu-dk)}
-.fc-d{font-family:Arial,sans-serif;font-size:10px;margin-top:2px;color:var(--green)}
-/* Updated */
-.upd{font-family:Arial,sans-serif;font-size:11px;color:var(--muted);border-bottom:1px solid var(--border);padding-bottom:9px;margin-bottom:14px}
-/* Stats row */
-.srow{display:flex;flex-wrap:wrap;margin-bottom:14px;border:1px solid var(--border);border-radius:4px;overflow:hidden}
-.st{flex:1;min-width:100px;padding:8px 12px;background:#fff;border-right:1px solid var(--border)}
-.st:last-child{border-right:none}
-.st-l{font-family:Arial,sans-serif;font-size:9px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:2px}
-.st-v{font-size:14px;font-weight:bold;color:var(--pu-dk)}
-/* Controls */
-.ctrl{display:flex;align-items:center;gap:7px;flex-wrap:wrap;font-family:Arial,sans-serif;font-size:12px;margin-bottom:8px}
-.clbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)}
-.cb{padding:3px 9px;border:1px solid var(--border);border-radius:3px;background:#fff;cursor:pointer;font-size:12px;font-family:Arial,sans-serif;color:var(--muted)}
-.cb.on{background:var(--pu);color:#fff;border-color:var(--pu)}
-/* Range */
-.drow{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-family:Arial,sans-serif;font-size:12px;margin-bottom:13px}
-.drow label{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)}
-.sc{padding:2px 9px;border:1px solid var(--border);border-radius:3px;background:#fff;cursor:pointer;font-size:12px;color:var(--pu)}
-.sc.on{background:var(--pu);color:#fff;border-color:var(--pu)}
-/* Charts */
-.cbox{border:1px solid var(--border);border-radius:4px;padding:12px;margin-bottom:20px}
-.leg{display:flex;gap:14px;flex-wrap:wrap;font-family:Arial,sans-serif;font-size:11px;color:var(--muted);margin-bottom:8px}
-.li{display:flex;align-items:center;gap:4px}
-.ld{width:18px;height:2px;border-radius:1px}
+/* ═══════════════════════════════════════════════════
+   RESET & VARIABLES
+═══════════════════════════════════════════════════ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --navy:     #0a0e1a;
+  --navy2:    #111827;
+  --navy3:    #1f2937;
+  --card:     #161d2e;
+  --card2:    #1e2740;
+  --border:   #2a3550;
+  --border2:  #374163;
+  --accent:   #3b82f6;
+  --accent2:  #60a5fa;
+  --green:    #10b981;
+  --green2:   #34d399;
+  --red:      #ef4444;
+  --red2:     #f87171;
+  --amber:    #f59e0b;
+  --purple:   #8b5cf6;
+  --text:     #f1f5f9;
+  --text2:    #94a3b8;
+  --text3:    #64748b;
+  --mono:     'JetBrains Mono', monospace;
+  --sans:     'Inter', sans-serif;
+}
+html{scroll-behavior:smooth}
+body{
+  font-family:var(--sans);
+  background:var(--navy);
+  color:var(--text);
+  font-size:14px;
+  line-height:1.6;
+  min-height:100vh;
+}
+
+/* ═══════════════════════════════════════════════════
+   LOADING
+═══════════════════════════════════════════════════ */
+.loader{
+  position:fixed;inset:0;
+  background:var(--navy);
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  z-index:9999;transition:opacity .5s;
+}
+.loader.hide{opacity:0;pointer-events:none}
+.loader-logo{
+  font-size:28px;font-weight:700;
+  letter-spacing:2px;color:var(--text);
+  margin-bottom:8px;
+}
+.loader-logo span{color:var(--accent)}
+.loader-sub{font-size:12px;color:var(--text3);margin-bottom:40px;letter-spacing:1px;text-transform:uppercase}
+.loader-bar{width:200px;height:2px;background:var(--border);border-radius:2px;overflow:hidden}
+.loader-progress{height:100%;background:linear-gradient(90deg,var(--accent),var(--purple));border-radius:2px;animation:prog 2s ease-in-out infinite}
+@keyframes prog{0%{width:0%}60%{width:80%}100%{width:100%}}
+.loader-step{font-size:11px;color:var(--text3);margin-top:12px;font-family:var(--mono)}
+
+/* ═══════════════════════════════════════════════════
+   HEADER
+═══════════════════════════════════════════════════ */
+.header{
+  background:var(--navy2);
+  border-bottom:1px solid var(--border);
+  padding:0 24px;
+  height:56px;
+  display:flex;align-items:center;
+  justify-content:space-between;
+  position:sticky;top:0;z-index:100;
+  backdrop-filter:blur(10px);
+}
+.header-left{display:flex;align-items:center;gap:16px}
+.logo{
+  font-size:18px;font-weight:700;
+  letter-spacing:1px;color:var(--text);
+}
+.logo span{color:var(--accent)}
+.logo-sep{color:var(--border2);margin:0 4px}
+.logo-sub{font-size:12px;color:var(--text3);font-weight:400;letter-spacing:.5px}
+.live-pill{
+  display:inline-flex;align-items:center;gap:6px;
+  background:rgba(16,185,129,.1);
+  border:1px solid rgba(16,185,129,.3);
+  border-radius:20px;padding:3px 10px;
+  font-size:11px;font-weight:500;color:var(--green2);
+}
+.live-dot{width:6px;height:6px;background:var(--green);border-radius:50%;animation:blink 2s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.header-right{display:flex;align-items:center;gap:12px}
+.hdr-select{
+  background:var(--card);border:1px solid var(--border);
+  color:var(--text);border-radius:8px;padding:6px 10px;
+  font-family:var(--sans);font-size:12px;cursor:pointer;
+  outline:none;
+}
+.hdr-select:focus{border-color:var(--accent)}
+.refresh-btn{
+  background:var(--accent);color:white;border:none;
+  border-radius:8px;padding:6px 14px;
+  font-family:var(--sans);font-size:12px;font-weight:500;
+  cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:6px;
+}
+.refresh-btn:hover{background:#2563eb;transform:translateY(-1px)}
+.refresh-btn svg{width:14px;height:14px}
+
+/* ═══════════════════════════════════════════════════
+   PAGE
+═══════════════════════════════════════════════════ */
+.page{max-width:1200px;margin:0 auto;padding:24px 20px 60px}
+
+/* ═══════════════════════════════════════════════════
+   PAGE TITLE
+═══════════════════════════════════════════════════ */
+.page-title{margin-bottom:20px}
+.page-title h1{
+  font-size:22px;font-weight:600;color:var(--text);
+  display:flex;align-items:center;gap:10px;
+}
+.ticker-badge{
+  background:rgba(59,130,246,.15);border:1px solid rgba(59,130,246,.3);
+  color:var(--accent2);border-radius:6px;padding:2px 8px;
+  font-size:13px;font-weight:600;font-family:var(--mono);
+}
+.page-title p{font-size:13px;color:var(--text3);margin-top:4px}
+
+/* ═══════════════════════════════════════════════════
+   KPI CARDS
+═══════════════════════════════════════════════════ */
+.kpi-grid{
+  display:grid;
+  grid-template-columns:repeat(5,1fr);
+  gap:12px;margin-bottom:20px;
+}
+@media(max-width:900px){.kpi-grid{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:600px){.kpi-grid{grid-template-columns:repeat(2,1fr)}}
+.kpi{
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:12px;padding:16px;
+  position:relative;overflow:hidden;
+  transition:border-color .2s;
+}
+.kpi:hover{border-color:var(--border2)}
+.kpi::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  background:var(--accent);
+}
+.kpi.green::before{background:var(--green)}
+.kpi.red::before{background:var(--red)}
+.kpi.amber::before{background:var(--amber)}
+.kpi.purple::before{background:var(--purple)}
+.kpi-label{
+  font-size:10px;font-weight:600;text-transform:uppercase;
+  letter-spacing:.8px;color:var(--text3);margin-bottom:8px;
+}
+.kpi-value{
+  font-size:24px;font-weight:700;color:var(--text);
+  font-family:var(--mono);line-height:1;
+}
+.kpi-sub{font-size:11px;color:var(--text3);margin-top:6px}
+.kpi-trend{
+  display:inline-flex;align-items:center;gap:3px;
+  font-size:11px;font-weight:500;margin-top:4px;
+}
+.kpi-trend.up{color:var(--red2)}
+.kpi-trend.down{color:var(--green2)}
+
+/* ═══════════════════════════════════════════════════
+   STATUS BAR
+═══════════════════════════════════════════════════ */
+.status-bar{
+  background:var(--card);border:1px solid var(--border);
+  border-radius:10px;padding:10px 16px;
+  display:flex;align-items:center;justify-content:space-between;
+  flex-wrap:wrap;gap:8px;margin-bottom:20px;
+  font-size:12px;font-family:var(--mono);color:var(--text3);
+}
+.status-item{display:flex;align-items:center;gap:6px}
+.status-dot{width:6px;height:6px;border-radius:50%}
+
+/* ═══════════════════════════════════════════════════
+   METRICS ROW
+═══════════════════════════════════════════════════ */
+.metrics-row{
+  display:grid;grid-template-columns:repeat(6,1fr);
+  gap:1px;background:var(--border);
+  border:1px solid var(--border);border-radius:10px;
+  overflow:hidden;margin-bottom:20px;
+}
+.metric{background:var(--card);padding:12px 14px}
+.metric-l{
+  font-size:10px;font-weight:600;text-transform:uppercase;
+  letter-spacing:.6px;color:var(--text3);margin-bottom:4px;
+}
+.metric-v{font-size:16px;font-weight:700;font-family:var(--mono);color:var(--text)}
+
+/* ═══════════════════════════════════════════════════
+   CONTROLS
+═══════════════════════════════════════════════════ */
+.controls{
+  display:flex;align-items:center;justify-content:space-between;
+  flex-wrap:wrap;gap:10px;margin-bottom:12px;
+}
+.ctrl-group{display:flex;align-items:center;gap:6px}
+.ctrl-label{font-size:11px;color:var(--text3);font-weight:500;margin-right:4px}
+.btn{
+  padding:5px 12px;border:1px solid var(--border);
+  border-radius:6px;background:var(--card);color:var(--text2);
+  font-family:var(--sans);font-size:12px;cursor:pointer;
+  transition:all .15s;font-weight:500;
+}
+.btn:hover{border-color:var(--border2);color:var(--text)}
+.btn.on{background:var(--accent);border-color:var(--accent);color:white}
+.btn.on.green{background:var(--green);border-color:var(--green)}
+.btn.on.red{background:var(--red);border-color:var(--red)}
+.btn.on.amber{background:var(--amber);border-color:var(--amber);color:var(--navy)}
+.range-btns{display:flex;gap:4px}
+.rng{
+  padding:4px 10px;border:1px solid var(--border);
+  border-radius:6px;background:transparent;color:var(--text3);
+  font-family:var(--mono);font-size:11px;cursor:pointer;transition:all .15s;
+}
+.rng:hover{color:var(--text);border-color:var(--border2)}
+.rng.on{background:var(--card2);border-color:var(--accent);color:var(--accent)}
+
+/* ═══════════════════════════════════════════════════
+   CHART CONTAINER
+═══════════════════════════════════════════════════ */
+.chart-panel{
+  background:var(--card);border:1px solid var(--border);
+  border-radius:12px;padding:20px;margin-bottom:16px;
+}
+.chart-header{
+  display:flex;align-items:center;justify-content:space-between;
+  margin-bottom:14px;
+}
+.chart-title{font-size:13px;font-weight:600;color:var(--text2)}
+.chart-legend{display:flex;gap:14px;flex-wrap:wrap}
+.leg-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text3)}
+.leg-dot{width:8px;height:8px;border-radius:50%}
+.leg-line{width:16px;height:2px;border-radius:1px}
 .cw{position:relative;width:100%}
-.chart-label{font-family:Arial,sans-serif;font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px;padding-left:2px}
-/* Two columns */
-.twocol{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
-@media(max-width:600px){.twocol{grid-template-columns:1fr}}
-.panel{border:1px solid var(--border);border-radius:4px;padding:14px}
-.panel h3{font-size:13px;font-weight:bold;color:var(--pu-dk);margin-bottom:2px}
-.psub{font-family:Arial,sans-serif;font-size:10px;color:var(--muted);margin-bottom:8px}
-.ph{position:relative;width:100%;height:210px}
-/* Params */
-.psec{margin-bottom:20px}
-.psec h2{font-family:Arial,sans-serif;font-size:12px;font-weight:700;color:var(--pu-dk);border-bottom:2px solid var(--pu);padding-bottom:4px;margin-bottom:8px;text-transform:uppercase;letter-spacing:.4px}
-.ptbl{width:100%;border-collapse:collapse;font-family:Arial,sans-serif;font-size:12px}
-.ptbl th{background:var(--pu-dk);color:#fff;padding:6px 10px;text-align:left;font-size:11px}
-.ptbl td{padding:6px 10px;border-bottom:1px solid var(--border)}
-.ptbl tr:nth-child(even) td{background:var(--bg2)}
-.psym{font-style:italic;font-size:14px;color:var(--pu-dk);font-family:Georgia,serif;font-weight:bold}
-.sig{color:var(--green);font-weight:bold}.nsig{color:var(--muted)}
-.pnote{font-family:Arial,sans-serif;font-size:10px;color:var(--muted);margin-top:5px}
-/* Equation */
-.meq{background:var(--bg2);border-left:3px solid var(--pu);padding:8px 12px;font-family:Georgia,serif;font-size:13px;border-radius:0 4px 4px 0;margin:7px 0 10px}
-.meq div{margin-bottom:4px}
-/* VaR */
-.vbadge{display:inline-block;background:var(--pu-dk);color:#fff;font-size:20px;font-weight:bold;padding:8px 16px;border-radius:4px;font-family:Arial,sans-serif;margin:6px 0}
-.vctx{font-family:Arial,sans-serif;font-size:11px;color:var(--muted);margin-top:3px}
-.vt{border-collapse:collapse;font-size:12px;font-family:Arial,sans-serif}
-.vt th{background:#f0f0f0;padding:4px 10px;border:1px solid var(--border);text-align:left}
-.vt td{padding:4px 10px;border:1px solid var(--border)}
-/* Nav */
-.navsec h4{font-family:Arial,sans-serif;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--pu-dk);margin-bottom:5px}
-.navlinks{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:14px}
-.nl{display:inline-block;padding:3px 10px;border:1px solid #c9a0dc;border-radius:3px;color:var(--pu);font-size:11px;font-family:Arial,sans-serif;cursor:pointer}
-.nl:hover,.nl.on{background:var(--pu);color:#fff}
-/* Footer */
-.foot{border-top:1px solid var(--border);padding-top:12px;font-family:Arial,sans-serif;font-size:11px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap}
-.foot a{color:var(--pu);text-decoration:none}
-/* Refresh badge */
-.refresh-info{font-family:Arial,sans-serif;font-size:10px;color:#aaa;margin-top:6px}
+
+/* ═══════════════════════════════════════════════════
+   TWO COLUMNS
+═══════════════════════════════════════════════════ */
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+@media(max-width:700px){.two-col{grid-template-columns:1fr}}
+.sub-panel{
+  background:var(--card);border:1px solid var(--border);
+  border-radius:12px;padding:18px;
+}
+.sub-panel h3{
+  font-size:13px;font-weight:600;color:var(--text2);
+  margin-bottom:3px;
+}
+.sub-panel p{font-size:11px;color:var(--text3);margin-bottom:12px}
+.panel-note{font-size:10px;color:var(--text3);margin-top:8px;font-style:italic}
+
+/* ═══════════════════════════════════════════════════
+   PARAMS TABLE
+═══════════════════════════════════════════════════ */
+.section-title{
+  font-size:11px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.8px;color:var(--text3);
+  border-bottom:1px solid var(--border);padding-bottom:8px;
+  margin-bottom:14px;display:flex;align-items:center;gap:8px;
+}
+.section-title::after{content:'';flex:1;height:1px;background:var(--border)}
+.params-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
+@media(max-width:700px){.params-grid{grid-template-columns:1fr}}
+.param-card{
+  background:var(--card);border:1px solid var(--border);
+  border-radius:10px;padding:14px;
+}
+.param-sym{
+  font-size:20px;font-weight:700;color:var(--accent);
+  font-family:var(--mono);margin-bottom:4px;
+}
+.param-name{font-size:11px;color:var(--text3);margin-bottom:8px}
+.param-val{
+  font-size:18px;font-weight:700;color:var(--text);
+  font-family:var(--mono);
+}
+.param-sig{font-size:10px;font-weight:600;margin-top:4px}
+.sig-strong{color:var(--green2)}
+.sig-ns{color:var(--text3)}
+
+/* ═══════════════════════════════════════════════════
+   MODEL EQUATION
+═══════════════════════════════════════════════════ */
+.eq-box{
+  background:var(--card);border:1px solid var(--border);
+  border-left:3px solid var(--accent);
+  border-radius:0 10px 10px 0;padding:16px 20px;
+  margin-bottom:16px;font-family:var(--mono);
+}
+.eq-line{font-size:14px;color:var(--text);margin-bottom:6px}
+.eq-line:last-child{margin-bottom:0}
+.eq-note{font-size:11px;color:var(--text3);margin-top:8px;font-family:var(--sans)}
+
+/* ═══════════════════════════════════════════════════
+   VAR SECTION
+═══════════════════════════════════════════════════ */
+.var-grid{display:grid;grid-template-columns:auto 1fr;gap:20px;align-items:start;margin-bottom:16px}
+@media(max-width:600px){.var-grid{grid-template-columns:1fr}}
+.var-badge-wrap{}
+.var-badge{
+  background:linear-gradient(135deg,var(--red),#dc2626);
+  color:white;font-size:28px;font-weight:700;
+  padding:16px 24px;border-radius:12px;
+  font-family:var(--mono);display:inline-block;
+  box-shadow:0 4px 20px rgba(239,68,68,.25);
+}
+.var-label{font-size:11px;color:var(--text3);margin-top:6px;text-align:center}
+.var-table{width:100%;border-collapse:collapse}
+.var-table th{
+  font-size:10px;font-weight:600;text-transform:uppercase;
+  letter-spacing:.5px;color:var(--text3);
+  padding:8px 12px;text-align:left;
+  border-bottom:1px solid var(--border);
+}
+.var-table td{
+  padding:8px 12px;border-bottom:1px solid rgba(42,53,80,.5);
+  font-family:var(--mono);font-size:13px;color:var(--text2);
+}
+.var-table tr:last-child td{border-bottom:none}
+.var-table .highlight{color:var(--red2);font-weight:600}
+
+/* ═══════════════════════════════════════════════════
+   NAVIGATION
+═══════════════════════════════════════════════════ */
+.nav-section{margin-bottom:16px}
+.nav-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;color:var(--text3);margin-bottom:8px}
+.nav-pills{display:flex;flex-wrap:wrap;gap:6px}
+.pill{
+  padding:4px 12px;border:1px solid var(--border);
+  border-radius:20px;color:var(--text3);font-size:11px;
+  font-family:var(--sans);cursor:pointer;transition:all .15s;
+}
+.pill:hover{border-color:var(--accent);color:var(--accent)}
+.pill.on{background:rgba(59,130,246,.15);border-color:var(--accent);color:var(--accent2);font-weight:500}
+
+/* ═══════════════════════════════════════════════════
+   FOOTER
+═══════════════════════════════════════════════════ */
+.footer{
+  border-top:1px solid var(--border);padding-top:16px;
+  display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;
+  font-size:11px;color:var(--text3);
+}
+.footer a{color:var(--accent);text-decoration:none}
+.footer a:hover{text-decoration:underline}
+
+/* ═══════════════════════════════════════════════════
+   ERROR
+═══════════════════════════════════════════════════ */
+.err-box{
+  background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.3);
+  border-radius:10px;padding:14px 16px;
+  font-size:13px;color:var(--red2);margin-bottom:16px;display:none;
+}
+.err-box strong{color:var(--red)}
+
+/* ═══════════════════════════════════════════════════
+   TOOLTIP CUSTOM (via chartjs)
+═══════════════════════════════════════════════════ */
 </style>
 </head>
 <body>
 
-<div class="ldr" id="ldr">
-  <div class="spin"></div>
-  <p id="lmsg">Telechargement donnees post-COVID...</p>
-  <small id="lstep">Yahoo Finance → GARCH(1,1) MLE → Graphiques</small>
+<!-- ══ LOADER ══════════════════════════════════════════════════════ -->
+<div class="loader" id="loader">
+  <div class="loader-logo">V<span>-</span>Lab</div>
+  <div class="loader-sub">Volatility Laboratory</div>
+  <div class="loader-bar"><div class="loader-progress"></div></div>
+  <div class="loader-step" id="lstep">Connecting to Yahoo Finance...</div>
 </div>
 
-<div class="hdr">
-  <div class="hdr-logo">V-Lab</div>
-  <div class="hdr-sep">|</div>
-  <div class="hdr-sub">Volatility Laboratory — GARCH(1,1) Student — Temps reel</div>
-</div>
-
-<div class="page">
-  
-  <div class="tbar">
-    <label>Actif :</label>
-    <select id="tsel">
-      <option value="DBK.DE" selected>Deutsche Bank</option>
-      <option value="BNP.PA">BNP Paribas</option>
-      <option value="GLE.PA">Societe Generale</option>
-      <option value="CBK.DE">Commerzbank</option>
-      <option value="^GSPC">S&P 500</option>
+<!-- ══ HEADER ══════════════════════════════════════════════════════ -->
+<header class="header">
+  <div class="header-left">
+    <div class="logo">V<span>-</span>Lab <span class="logo-sep">/</span> <span class="logo-sub">Volatility Monitor</span></div>
+    <div class="live-pill"><span class="live-dot"></span>LIVE</div>
+  </div>
+  <div class="header-right">
+    <select class="hdr-select" id="tsel">
+      <option value="DBK.DE" selected>Deutsche Bank · DBK.DE</option>
+      <option value="BNP.PA">BNP Paribas · BNP.PA</option>
+      <option value="GLE.PA">Soc. Générale · GLE.PA</option>
+      <option value="CBK.DE">Commerzbank · CBK.DE</option>
+      <option value="^GSPC">S&P 500 · SPX</option>
       <option value="^GDAXI">DAX 40</option>
     </select>
-    <label>Depuis :</label>
-    <select id="sdate">
-      <option value="2021-01-01" selected>2021</option>
-      <option value="2022-01-01">2022</option>
-      <option value="2023-01-01">2023</option>
-      <option value="2024-01-01">2024</option>
-      <option value="2020-03-01">2020</option>
+    <select class="hdr-select" id="sdate">
+      <option value="2021-01-01" selected>Post-COVID · Jan 2021</option>
+      <option value="2022-01-01">Since 2022</option>
+      <option value="2023-01-01">Since 2023</option>
+      <option value="2024-01-01">Since 2024</option>
+      <option value="2020-03-01">Since COVID crash</option>
     </select>
-    <button class="rbtn" onclick="loadData()">&#8635; Actualiser</button>
-    <span class="live"><span class="dot"></span> Donnees en temps reel</span>
+    <button class="refresh-btn" onclick="loadData()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+      Refresh
+    </button>
+  </div>
+</header>
+
+<!-- ══ PAGE ════════════════════════════════════════════════════════ -->
+<main class="page">
+  
+  <div class="err-box" id="errbox">
+    <strong>Connection Error —</strong> <span id="errmsg"></span>
+    <br><small style="color:var(--text3)">Make sure the backend is running at <code>https://vlab-dbk.onrender.com</code></small>
   </div>
   
-  <div class="err" id="ebox"><strong>Erreur :</strong> <span id="emsg"></span> — Verifiez que le backend tourne sur localhost:8000</div>
-  
-  <h1 id="ptitle">Deutsche Bank AG (DBK.DE)</h1>
-  <p class="sub" id="psub">Volatilite GARCH(1,1) Student — periode post-COVID — derniere mise a jour : <strong id="ldate">—</strong></p>
-  
-  <div class="fcards">
-    <div class="fc"><div class="fc-h">Volatilite aujourd'hui</div><div class="fc-v" id="v0">—</div><div class="fc-d">σt estime</div></div>
-    <div class="fc"><div class="fc-h">Dans 1 semaine</div><div class="fc-v" id="v5">—</div><div class="fc-d">prevision GARCH</div></div>
-    <div class="fc"><div class="fc-h">Dans 1 mois</div><div class="fc-v" id="v22">—</div><div class="fc-d">retour vers σ∞</div></div>
-    <div class="fc" style="background:#f0f8ff;border-color:#b8d0f0">
-      <div class="fc-h">Vol. Annualisee</div><div class="fc-v" id="avol" style="color:#0a3d6b">—</div><div class="fc-d" style="color:#555">σ x √252</div></div>
-    <div class="fc" style="background:#fffbeb;border-color:#f0d8a0">
-      <div class="fc-h">Cours cloture</div><div class="fc-v" id="lpx" style="color:#7c4a00">—</div><div class="fc-d" style="color:#555" id="lpxd">—</div></div>
+  <!-- Title -->
+  <div class="page-title">
+    <h1><span class="ticker-badge" id="ticker-badge">DBK.DE</span> <span id="ptitle">Deutsche Bank AG — Volatility Analysis</span></h1>
+    <p id="psub">GARCH(1,1) Student-t · Real-time data · Last update: <strong id="ldate">—</strong></p>
   </div>
   
-  <div class="upd" id="ubar">Chargement...</div>
-  <div class="refresh-info" id="rinfo"></div>
-  
-  <div class="srow">
-    <div class="st"><div class="st-l">VaR 1%</div><div class="st-v" id="svar" style="color:var(--red)">—</div></div>
-    <div class="st"><div class="st-l">α + β</div><div class="st-v" id="spers">—</div></div>
-    <div class="st"><div class="st-l">ν Student</div><div class="st-v" id="snu">—</div></div>
-    <div class="st"><div class="st-l">Demi-vie</div><div class="st-v" id="shl">—</div></div>
-    <div class="st"><div class="st-l">JB stat</div><div class="st-v" id="sjb" style="font-size:12px">—</div></div>
-    <div class="st"><div class="st-l">N obs.</div><div class="st-v" id="sn" style="font-size:12px">—</div></div>
+  <!-- KPI Cards -->
+  <div class="kpi-grid">
+    <div class="kpi">
+      <div class="kpi-label">Volatility Today</div>
+      <div class="kpi-value" id="v0">—</div>
+      <div class="kpi-sub">σ̂ₜ conditional</div>
+    </div>
+    <div class="kpi green">
+      <div class="kpi-label">1-Week Forecast</div>
+      <div class="kpi-value" id="v5">—</div>
+      <div class="kpi-sub">GARCH term structure</div>
+    </div>
+    <div class="kpi green">
+      <div class="kpi-label">1-Month Forecast</div>
+      <div class="kpi-value" id="v22">—</div>
+      <div class="kpi-sub">Mean reversion σ∞</div>
+    </div>
+    <div class="kpi amber">
+      <div class="kpi-label">Annualised Vol.</div>
+      <div class="kpi-value" id="avol">—</div>
+      <div class="kpi-sub">σ̂ × √252</div>
+    </div>
+    <div class="kpi purple">
+      <div class="kpi-label">Last Close</div>
+      <div class="kpi-value" id="lpx">—</div>
+      <div class="kpi-sub" id="lpxd">—</div>
+    </div>
   </div>
   
-  <div class="ctrl">
-    <span class="clbl">Afficher</span>
-    <button class="cb on" onclick="tog('px',this)">Cours Pt</button>
-    <button class="cb on" onclick="tog('vol',this)">Volatilite σt</button>
-    <button class="cb on" onclick="tog('var',this)">VaR 1%</button>
-    <button class="cb"    onclick="tog('ret',this)">Rendements Rt</button>
+  <!-- Status bar -->
+  <div class="status-bar">
+    <div style="display:flex;gap:20px;flex-wrap:wrap">
+      <div class="status-item"><span class="status-dot" style="background:var(--green)"></span><span id="ubar">Loading...</span></div>
+    </div>
+    <div style="color:var(--text3)" id="rinfo"></div>
   </div>
   
-  <div class="drow">
-    <label>Zoom :</label>
-    <button class="sc" onclick="setR(3,this)">3M</button>
-    <button class="sc" onclick="setR(6,this)">6M</button>
-    <button class="sc on" onclick="setR(12,this)">1A</button>
-    <button class="sc" onclick="setR(24,this)">2A</button>
-    <button class="sc" onclick="setR(0,this)">Tout</button>
+  <!-- Metrics row -->
+  <div class="metrics-row">
+    <div class="metric"><div class="metric-l">VaR 1%</div><div class="metric-v" id="svar" style="color:var(--red2)">—</div></div>
+    <div class="metric"><div class="metric-l">α + β (persist.)</div><div class="metric-v" id="spers">—</div></div>
+    <div class="metric"><div class="metric-l">ν Student</div><div class="metric-v" id="snu">—</div></div>
+    <div class="metric"><div class="metric-l">Half-life</div><div class="metric-v" id="shl">—</div></div>
+    <div class="metric"><div class="metric-l">JB Stat</div><div class="metric-v" id="sjb" style="color:var(--red2)">—</div></div>
+    <div class="metric"><div class="metric-l">Observations</div><div class="metric-v" id="sn">—</div></div>
   </div>
   
-  <div class="cbox">
-    <div class="leg">
-      <div class="li"><div class="ld" style="background:#1D9E75"></div>Cours (€)</div>
-      <div class="li"><div class="ld" style="background:#D85A30"></div>Volatilite σt (%)</div>
-      <div class="li"><div class="ld" style="background:#378ADD"></div>VaR 1% (%)</div>
-      <div class="li"><div class="ld" style="background:#6366f1"></div>Rendements (%)</div>
+  <!-- Controls -->
+  <div class="controls">
+    <div class="ctrl-group">
+      <span class="ctrl-label">Show:</span>
+      <button class="btn on" onclick="tog('px',this)">Price</button>
+      <button class="btn on green" onclick="tog('vol',this)">Volatility σₜ</button>
+      <button class="btn on red" onclick="tog('var',this)">VaR 1%</button>
+      <button class="btn" onclick="tog('ret',this)">Returns</button>
+    </div>
+    <div class="ctrl-group">
+      <span class="ctrl-label">Zoom:</span>
+      <div class="range-btns">
+        <button class="rng" onclick="setR(3,this)">3M</button>
+        <button class="rng" onclick="setR(6,this)">6M</button>
+        <button class="rng on" onclick="setR(12,this)">1Y</button>
+        <button class="rng" onclick="setR(24,this)">2Y</button>
+        <button class="rng" onclick="setR(0,this)">All</button>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Main charts -->
+  <div class="chart-panel">
+    <div class="chart-header">
+      <div class="chart-title" id="chart-title">Price & Risk Dashboard — DBK.DE</div>
+      <div class="chart-legend">
+        <div class="leg-item"><div class="leg-dot" style="background:#10b981"></div>Close Price (€)</div>
+        <div class="leg-item"><div class="leg-dot" style="background:#f59e0b"></div>Cond. Volatility (%)</div>
+        <div class="leg-item"><div class="leg-dot" style="background:#ef4444"></div>VaR 1% (%)</div>
+        <div class="leg-item"><div class="leg-dot" style="background:#6366f1"></div>Returns (%)</div>
+      </div>
     </div>
     
-    <div id="wpx" class="cw" style="height:200px;margin-bottom:10px">
-      <div class="chart-label">Cours de cloture (€)</div>
-      <canvas id="cpx" style="height:185px"></canvas>
+    <div id="wpx" class="cw" style="height:210px;margin-bottom:12px">
+      <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:4px">CLOSING PRICE (€)</div>
+      <canvas id="cpx"></canvas>
     </div>
-    <div id="wvol" class="cw" style="height:170px;margin-bottom:10px">
-      <div class="chart-label">Volatilite conditionnelle σt (%)</div>
-      <canvas id="cvol" style="height:155px"></canvas>
+    <div id="wvol" class="cw" style="height:170px;margin-bottom:12px">
+      <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:4px">CONDITIONAL VOLATILITY σₜ (%)</div>
+      <canvas id="cvol"></canvas>
     </div>
-    <div id="wvar" class="cw" style="height:170px;margin-bottom:10px">
-      <div class="chart-label">Value at Risk journaliere 1% (%)</div>
-      <canvas id="cvar" style="height:155px"></canvas>
+    <div id="wvar" class="cw" style="height:170px;margin-bottom:12px">
+      <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:4px">VALUE AT RISK 1% (%)</div>
+      <canvas id="cvar"></canvas>
     </div>
     <div id="wret" class="cw" style="height:140px;display:none">
-      <div class="chart-label">Rendements logarithmiques journaliers (%)</div>
-      <canvas id="cret" style="height:125px"></canvas>
+      <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:4px">LOG RETURNS (%)</div>
+      <canvas id="cret"></canvas>
     </div>
   </div>
   
-  <div class="twocol">
-    <div class="panel">
+  <!-- NIC + Term Structure -->
+  <div class="two-col">
+    <div class="sub-panel">
       <h3>News Impact Curve</h3>
-      <p class="psub">Effet d'un choc εt sur la volatilite de demain σt+1</p>
-      <div class="ph"><canvas id="cnic"></canvas></div>
-      <p style="font-family:Arial,sans-serif;font-size:10px;color:#999;margin-top:5px">
-        Courbe en U symetrique — pas d'effet de levier (γ=0).
-      </p>
+      <p>Effect of shock εₜ on tomorrow's volatility σₜ₊₁</p>
+      <div style="position:relative;height:210px"><canvas id="cnic"></canvas></div>
+      <div class="panel-note">Symmetric U-shape (γ=0). GJR-GARCH would add leverage effect asymmetry.</div>
     </div>
-    <div class="panel">
-      <h3>Term Structure de Volatilite</h3>
-      <p class="psub">Prevision σt+h et convergence vers σ∞ (long terme)</p>
-      <div class="ph"><canvas id="cfc"></canvas></div>
-      <p style="font-family:Arial,sans-serif;font-size:10px;color:#999;margin-top:5px" id="hlnote">—</p>
+    <div class="sub-panel">
+      <h3>Volatility Term Structure</h3>
+      <p>Forecast σₜ₊ₕ converging toward long-run σ∞</p>
+      <div style="position:relative;height:210px"><canvas id="cfc"></canvas></div>
+      <div class="panel-note" id="hlnote">Half-life: — days</div>
     </div>
   </div>
   
-  <div class="psec">
-    <h2>Parametres estimes — GARCH(1,1) Student</h2>
-    <table class="ptbl">
-      <thead><tr><th>Parametre</th><th>Sym.</th><th>Valeur</th><th>Interpretation</th></tr></thead>
-      <tbody id="ptbody"><tr><td colspan="4" style="text-align:center;font-family:Arial,sans-serif;color:var(--muted)">Chargement...</td></tr></tbody>
-    </table>
-    <p class="pnote" id="pnote">—</p>
+  <!-- Parameters -->
+  <div class="section-title">Model Parameters — GARCH(1,1) Student-t MLE</div>
+  <div class="params-grid" id="params-grid">
+    <div class="param-card" style="grid-column:1/-1;text-align:center;color:var(--text3);padding:30px;font-size:13px">Estimating model...</div>
   </div>
   
-  <div class="psec">
-    <h2>Equations du modele</h2>
-    <div class="meq">
-      <div><em>Rt = μ + εt</em> &nbsp;avec&nbsp; <em>εt = σt zt</em>, &nbsp;<em>zt ~ Student(ν)</em></div>
-      <div><em>σt² = ω + α · εt-1² + β · σt-1²</em></div>
-      <div style="font-size:11px;color:#777;font-family:Arial,sans-serif;margin-top:4px" id="eqnote">—</div>
+  <!-- Equation -->
+  <div class="section-title">Model Specification</div>
+  <div class="eq-box">
+    <div class="eq-line">Rₜ = μ + εₜ &nbsp;&nbsp; εₜ = σₜ zₜ &nbsp;&nbsp; zₜ ~ Student(ν)</div>
+    <div class="eq-line">σₜ² = ω + α · εₜ₋₁² + β · σₜ₋₁²</div>
+    <div class="eq-note" id="eqnote">Long-run variance: σ²∞ = ω / (1 − α − β) — loading...</div>
+  </div>
+  
+  <!-- Goodness of fit -->
+  <div class="section-title">Estimation Results</div>
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:16px">
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;font-family:var(--mono);font-size:12px">
+      <div><div style="color:var(--text3);font-size:10px;margin-bottom:3px">LOG-LIKELIHOOD</div><div style="color:var(--text)" id="st-ll">—</div></div>
+      <div><div style="color:var(--text3);font-size:10px;margin-bottom:3px">AIC</div><div style="color:var(--text)" id="st-aic">—</div></div>
+      <div><div style="color:var(--text3);font-size:10px;margin-bottom:3px">BIC</div><div style="color:var(--text)" id="st-bic">—</div></div>
+      <div><div style="color:var(--text3);font-size:10px;margin-bottom:3px">PERIOD</div><div style="color:var(--text)" id="st-period">—</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;font-family:var(--mono);font-size:12px;margin-top:12px">
+      <div><div style="color:var(--text3);font-size:10px;margin-bottom:3px">SKEWNESS</div><div style="color:var(--text)" id="st-sk">—</div></div>
+      <div><div style="color:var(--text3);font-size:10px;margin-bottom:3px">EXCESS KURTOSIS</div><div style="color:var(--text)" id="st-ku">—</div></div>
+      <div><div style="color:var(--text3);font-size:10px;margin-bottom:3px">JB p-value</div><div style="color:var(--red2)" id="st-jbp">—</div></div>
+      <div><div style="color:var(--text3);font-size:10px;margin-bottom:3px">RETURN STD</div><div style="color:var(--text)" id="st-std">—</div></div>
     </div>
   </div>
   
-  <div class="psec">
-    <h2>Value at Risk — <span id="vdate">—</span></h2>
-    <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start">
-      <div>
-        <div class="vbadge" id="vbadge">VaR(1%) = —</div>
-        <div class="vctx">Perte max journaliere au seuil de confiance 99%</div>
-        <div class="vctx" id="vf" style="margin-top:3px">—</div>
-      </div>
-      <table class="vt" id="vtbl"><tr><th>Capital</th><th>VaR (€)</th></tr></table>
+  <!-- VaR -->
+  <div class="section-title">Value at Risk — <span id="vdate">—</span></div>
+  <div class="var-grid">
+    <div class="var-badge-wrap">
+      <div class="var-badge" id="vbadge">—</div>
+      <div class="var-label">Daily VaR at 99% confidence</div>
+    </div>
+    <div>
+      <table class="var-table" id="vtbl">
+        <thead><tr><th>Portfolio</th><th>Max Daily Loss</th><th>Annualised</th></tr></thead>
+        <tbody><tr><td colspan="3" style="text-align:center;color:var(--text3)">Loading...</td></tr></tbody>
+      </table>
+      <div style="font-size:11px;color:var(--text3);margin-top:6px;font-family:var(--mono)" id="vformula">—</div>
     </div>
   </div>
   
-  <div class="navsec">
-    <h4>Autres actifs</h4>
-    <div class="navlinks">
-      <span class="nl on">DBK.DE ★</span>
-      <span class="nl" onclick="sw('BNP.PA')">BNP Paribas</span>
-      <span class="nl" onclick="sw('GLE.PA')">Soc. Generale</span>
-      <span class="nl" onclick="sw('CBK.DE')">Commerzbank</span>
-      <span class="nl" onclick="sw('^GSPC')">S&P 500</span>
-      <span class="nl" onclick="sw('^GDAXI')">DAX 40</span>
+  <!-- Navigation -->
+  <div class="nav-section">
+    <div class="nav-label">Other assets</div>
+    <div class="nav-pills">
+      <span class="pill on" id="pill-cur">DBK.DE ★</span>
+      <span class="pill" onclick="sw('BNP.PA')">BNP Paribas</span>
+      <span class="pill" onclick="sw('GLE.PA')">Soc. Générale</span>
+      <span class="pill" onclick="sw('CBK.DE')">Commerzbank</span>
+      <span class="pill" onclick="sw('^GSPC')">S&P 500</span>
+      <span class="pill" onclick="sw('^GDAXI')">DAX 40</span>
+    </div>
+  </div>
+  <div class="nav-section">
+    <div class="nav-label">Model variants</div>
+    <div class="nav-pills">
+      <span class="pill on">GARCH(1,1) Student ★</span>
+      <span class="pill">GARCH(1,1) Normal</span>
+      <span class="pill">GJR-GARCH (leverage)</span>
+      <span class="pill">EGARCH</span>
     </div>
   </div>
   
-  <hr style="margin:18px 0;border:none;border-top:1px solid #ddd">
-  <div class="foot">
-    <span>Analyse quantitative post-COVID — donnees temps reel</span>
-    <span style="margin-left:auto;color:#aaa">Inspire de <a href="https://vlab.stern.nyu.edu" target="_blank">V-Lab NYU Stern</a> · Yahoo Finance · GARCH(1,1) MLE</span>
+  <hr style="border:none;border-top:1px solid var(--border);margin:20px 0">
+  
+  <div class="footer">
+    <span>V-Lab Volatility Monitor · GARCH(1,1) Student-t · Real-time data</span>
+    <span>Inspired by <a href="https://vlab.stern.nyu.edu" target="_blank">NYU Stern V-Lab</a> · Data: Yahoo Finance · © 2026</span>
   </div>
-</div>
+
+</main>
 
 <script>
+/* ═══════════════════════════════════════════════════
+   CONFIG
+═══════════════════════════════════════════════════ */
 const API = "https://vlab-dbk.onrender.com";
-let D=null, C={}, M=12;
+let D = null, C = {}, M = 12;
 
-// ── Chargement donnees ─────────────────────────────────────────────────
-async function loadData(){
-  const t = document.getElementById('tsel').value;
-  const s = document.getElementById('sdate').value;
-  showL(`Telechargement ${t} depuis Yahoo Finance...`, 'Estimation GARCH(1,1) Student en cours...');
-  document.getElementById('ebox').style.display='none';
+/* ═══════════════════════════════════════════════════
+   LOAD DATA
+═══════════════════════════════════════════════════ */
+async function loadData() {
+  const ticker = document.getElementById('tsel').value;
+  const start  = document.getElementById('sdate').value;
+  step(`Fetching ${ticker} from Yahoo Finance...`);
+  showLoader();
+  document.getElementById('errbox').style.display = 'none';
   try {
-    const r = await fetch(`${API}/api/volatility/${encodeURIComponent(t)}?start=${s}`);
-    if(!r.ok){ const e=await r.json(); throw new Error(e.detail||`HTTP ${r.status}`); }
-    D = await r.json();
+    step('Estimating GARCH(1,1) Student-t via MLE...');
+    const res = await fetch(`${API}/api/volatility/${encodeURIComponent(ticker)}?start=${start}`);
+    if (!res.ok) { const e = await res.json(); throw new Error(e.detail || `HTTP ${res.status}`); }
+    D = await res.json();
+    step('Rendering charts...');
     render();
-    hideL();
-    // Auto-refresh toutes les heures
+    hideLoader();
     setTimeout(loadData, 3600000);
-    set('rinfo', `Prochain rafraichissement automatique dans 1h · Cache actif 1h`);
-  } catch(e){ hideL(); showErr(e.message); }
+    set('rinfo', `Auto-refresh in 1h · Cache: 1h`);
+  } catch(e) {
+    hideLoader();
+    showErr(e.message);
+  }
 }
 
-// ── Rendu principal ────────────────────────────────────────────────────
-function render(){
-  const p=D.params, fc=D.forecast, fi=h=>fc.horizons.indexOf(h);
-  set('ptitle', `${D.ticker} — Analyse de Volatilite GARCH(1,1)`);
-  set('ldate',  fd(D.last_date));
-  set('psub',   `Volatilite GARCH(1,1) Student — periode post-COVID — derniere mise a jour : ${fd(D.last_date)}`);
-  set('v0',  pc(fc.vols[fi(0)]));
-  set('v5',  pc(fc.vols[fi(5)]));
-  set('v22', pc(fc.vols[fi(22)]));
-  set('avol', pc(D.ann_vol));
-  set('lpx',  `${D.last_price.toFixed(2)} €`);
-  set('lpxd', fd(D.last_date));
-  set('ubar', `Cloture : ${fd(D.last_date)} | σt = ${pc(D.sig_today)} | VaR 1% = ${pc(D.var_today)} | n = ${D.n_obs.toLocaleString()} obs. | ${D.start_date} → ${D.last_date}`);
-  set('svar',  pc(D.var_today));
-  set('spers', D.persistence.toFixed(4));
-  set('snu',   p.nu.toFixed(3));
-  set('shl',   `≈ ${Math.abs(D.halflife).toFixed(0)}j`);
-  set('sjb',   `${D.stats.jb_stat.toLocaleString()}***`);
-  set('sn',    D.n_obs.toLocaleString());
-  document.getElementById('ptbody').innerHTML=`
-    <tr><td>Constante variance</td><td><span class="psym">ω</span></td><td>${p.omega.toFixed(4)}</td><td>Niveau de base de la variance</td></tr>
-    <tr><td>Effet ARCH (choc recent)</td><td><span class="psym">α</span></td><td>${p.alpha.toFixed(4)}</td><td><span class="sig">***</span> Reactivite aux innovations εt-1²</td></tr>
-    <tr><td>Effet GARCH (memoire)</td><td><span class="psym">β</span></td><td>${p.beta.toFixed(4)}</td><td><span class="sig">***</span> Persistance de la variance passee</td></tr>
-    <tr><td>Persistance totale</td><td><span class="psym">α+β</span></td><td><strong>${D.persistence.toFixed(4)}</strong></td><td style="color:#0a3d6b">Demi-vie ≈ ${Math.abs(D.halflife).toFixed(0)} jours</td></tr>
-    <tr><td>Degres de liberte</td><td><span class="psym">ν</span></td><td>${p.nu.toFixed(3)}</td><td><span class="sig">***</span> Queues epaisses significatives</td></tr>
-    <tr><td>Moyenne des rendements</td><td><span class="psym">μ</span></td><td>${p.mu.toFixed(5)}</td><td><span class="nsig">n.s.</span> μ ≈ 0 confirme</td></tr>`;
-  const si2 = p.omega/(1-D.persistence);
-  set('eqnote', `σ²∞ = ω/(1−α−β) = ${p.omega.toFixed(4)}/${(1-D.persistence).toFixed(4)} = ${si2.toFixed(4)} %² → σ∞ ≈ ${D.sig_inf.toFixed(3)} %/jour ≈ ${(D.sig_inf*Math.sqrt(252)).toFixed(1)} %/an`);
-  set('vdate',  fd(D.last_date));
-  set('vbadge', `VaR(1%) = ${pc(D.var_today)}`);
-  set('vf',     `σt = ${pc(D.sig_today)} | q1% Student(ν=${p.nu.toFixed(1)}) = ${D.q01.toFixed(4)}`);
-  set('hlnote', `α+β = ${D.persistence.toFixed(4)} → demi-vie des chocs ≈ ${Math.abs(D.halflife).toFixed(0)} jours`);
-  const vr=Object.entries(D.var_by_capital).map(([c,v])=>
-    `<tr><td>${Number(c).toLocaleString('fr-FR')} €</td>
-     <td style="text-align:right${c==='100000'?';font-weight:bold;color:var(--red)':''}">${v.toLocaleString('fr-FR',{minimumFractionDigits:2})} €</td></tr>`).join('');
-  document.getElementById('vtbl').innerHTML=`<tr><th>Capital</th><th>VaR (€)</th></tr>${vr}`;
-  buildCharts(); buildNIC(); buildForecast();
+/* ═══════════════════════════════════════════════════
+   RENDER
+═══════════════════════════════════════════════════ */
+function render() {
+  const p = D.params, fc = D.forecast, fi = h => fc.horizons.indexOf(h);
+  
+  set('ticker-badge', D.ticker);
+  set('ptitle', `${D.ticker} — Volatility Analysis`);
+  set('psub', `GARCH(1,1) Student-t · Real-time data · Last update: ${fd(D.last_date)}`);
+  set('ldate', fd(D.last_date));
+  set('chart-title', `Price & Risk Dashboard — ${D.ticker}`);
+  
+  // KPI
+  setV('v0',   pc(fc.vols[fi(0)]));
+  setV('v5',   pc(fc.vols[fi(5)]));
+  setV('v22',  pc(fc.vols[fi(22)]));
+  setV('avol', D.ann_vol.toFixed(2) + '%');
+  setV('lpx',  D.last_price.toFixed(2) + ' €');
+  set('lpxd',  fd(D.last_date));
+  
+  // Status
+  set('ubar', `Close: ${fd(D.last_date)} · σₜ = ${pc(D.sig_today)} · VaR₁% = ${pc(D.var_today)} · n = ${D.n_obs.toLocaleString()} obs · ${D.start_date} → ${D.last_date}`);
+  
+  // Metrics
+  setV('svar',  pc(D.var_today));
+  setV('spers', D.persistence.toFixed(4));
+  setV('snu',   p.nu.toFixed(3));
+  setV('shl',   `≈ ${Math.abs(D.halflife).toFixed(0)}d`);
+  setV('sjb',   D.stats.jb_stat.toLocaleString() + '***');
+  setV('sn',    D.n_obs.toLocaleString());
+  
+  // Parameters grid
+  const perStr = D.persistence.toFixed(4);
+  const hlStr  = Math.abs(D.halflife).toFixed(0);
+  document.getElementById('params-grid').innerHTML = `
+    <div class="param-card">
+      <div class="param-sym">ω</div>
+      <div class="param-name">Variance constant</div>
+      <div class="param-val">${p.omega.toFixed(4)}</div>
+      <div class="param-sig sig-strong">*** significant</div>
+    </div>
+    <div class="param-card">
+      <div class="param-sym">α</div>
+      <div class="param-name">ARCH effect (shock)</div>
+      <div class="param-val">${p.alpha.toFixed(4)}</div>
+      <div class="param-sig sig-strong">*** significant — reactivity to εₜ₋₁²</div>
+    </div>
+    <div class="param-card">
+      <div class="param-sym">β</div>
+      <div class="param-name">GARCH effect (memory)</div>
+      <div class="param-val">${p.beta.toFixed(4)}</div>
+      <div class="param-sig sig-strong">*** significant — persistence of σₜ₋₁²</div>
+    </div>
+    <div class="param-card">
+      <div class="param-sym">α+β</div>
+      <div class="param-name">Total persistence</div>
+      <div class="param-val" style="color:var(--amber)">${perStr}</div>
+      <div class="param-sig" style="color:var(--amber)">Half-life ≈ ${hlStr} days</div>
+    </div>
+    <div class="param-card">
+      <div class="param-sym">ν</div>
+      <div class="param-name">Student degrees of freedom</div>
+      <div class="param-val">${p.nu.toFixed(3)}</div>
+      <div class="param-sig sig-strong">*** significant — fat tails confirmed</div>
+    </div>
+    <div class="param-card">
+      <div class="param-sym">μ</div>
+      <div class="param-name">Mean return</div>
+      <div class="param-val">${p.mu.toFixed(5)}</div>
+      <div class="param-sig sig-ns">n.s. — μ ≈ 0 (efficient market)</div>
+    </div>`;
+  
+  // Equation note
+  const si2 = (p.omega / (1 - D.persistence)).toFixed(4);
+  set('eqnote', `σ²∞ = ω/(1−α−β) = ${p.omega.toFixed(4)}/${(1-D.persistence).toFixed(4)} = ${si2} %²  →  σ∞ ≈ ${D.sig_inf.toFixed(3)} %/day ≈ ${(D.sig_inf*Math.sqrt(252)).toFixed(2)} %/year`);
+  
+  // Goodness of fit
+  set('st-ll',     p.loglik.toFixed(2));
+  set('st-aic',    p.aic.toFixed(2));
+  set('st-bic',    p.bic.toFixed(2));
+  set('st-period', `${D.start_date} → ${D.last_date}`);
+  set('st-sk',     D.stats.skewness.toFixed(4));
+  set('st-ku',     D.stats.kurtosis.toFixed(4));
+  set('st-jbp',    D.stats.jb_p < 0.0001 ? '< 0.0001' : D.stats.jb_p.toFixed(4));
+  set('st-std',    D.stats.std.toFixed(4) + '%');
+  
+  // VaR
+  set('vdate', fd(D.last_date));
+  set('vbadge', `VaR₁% = ${pc(D.var_today)}`);
+  set('vformula', `σ̂ₜ = ${pc(D.sig_today)}  ·  q₁%[Student(ν=${p.nu.toFixed(1)})] = ${D.q01.toFixed(4)}  ·  VaR = −(μ + σ̂ₜ × q₁%)`);
+  set('hlnote', `α+β = ${D.persistence.toFixed(4)} → half-life of volatility shocks ≈ ${Math.abs(D.halflife).toFixed(0)} days`);
+  
+  const varBody = Object.entries(D.var_by_capital).map(([c, v]) => {
+    const cap = Number(c);
+    const ann = (v * Math.sqrt(252)).toFixed(0);
+    const hl  = cap === 100000 ? ' class="highlight"' : '';
+    return `<tr><td${hl}>${cap.toLocaleString('fr-FR')} €</td><td${hl}>${v.toLocaleString('fr-FR',{minimumFractionDigits:2})} €</td><td${hl}>${Number(ann).toLocaleString('fr-FR')} €/yr</td></tr>`;
+  }).join('');
+  document.querySelector('#vtbl tbody').innerHTML = varBody;
+  
+  buildCharts();
+  buildNIC();
+  buildForecast();
 }
 
-// ── Options communes Chart.js ─────────────────────────────────────────
-function mkCO(extraPlugins){
+/* ═══════════════════════════════════════════════════
+   CHART OPTIONS
+═══════════════════════════════════════════════════ */
+function mkOpts(yLabel, yFmt, extra) {
   return {
-    responsive:true, maintainAspectRatio:false, animation:{duration:400},
-    interaction:{mode:'index', intersect:false},  // ← tooltip sur toute la colonne
-    plugins:{
-      legend:{display:false},
-      tooltip:{
-        backgroundColor:'rgba(255,255,255,0.97)',
-        titleColor:'#330662', bodyColor:'#333',
-        borderColor:'#ddd', borderWidth:1,
-        titleFont:{family:'Arial',size:11,weight:'bold'},
-        bodyFont:{family:'Arial',size:11},
-        padding:10,
-        callbacks:{
+    responsive: true, maintainAspectRatio: false,
+    animation: { duration: 500 },
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: 'rgba(17,24,39,0.97)',
+        titleColor: '#94a3b8',
+        bodyColor: '#f1f5f9',
+        borderColor: '#2a3550',
+        borderWidth: 1,
+        titleFont: { family: 'JetBrains Mono', size: 11 },
+        bodyFont: { family: 'JetBrains Mono', size: 12 },
+        padding: 12,
+        displayColors: true,
+        boxWidth: 8, boxHeight: 8,
+        callbacks: {
           title: items => items[0]?.label || '',
           label: c => {
             const v = c.parsed.y;
-            if(v==null) return null;
-            return `  ${c.dataset.label} : ${v.toFixed(3)}${c.dataset.unit||''}`;
-          }
-        },
-        ...extraPlugins
+            if (v == null) return null;
+            return `  ${c.dataset.label}: ${v.toFixed(3)}${c.dataset.suffix || ''}`;
+          },
+          ...(extra?.callbacks || {})
+        }
       }
     },
-    elements:{point:{radius:0, hoverRadius:5, hoverBackgroundColor:'#57068c'}, line:{tension:.2, borderWidth:1.4}},
+    elements: {
+      point: { radius: 0, hoverRadius: 4, hoverBackgroundColor: '#3b82f6' },
+      line:  { tension: 0.2, borderWidth: 1.5 }
+    },
+    scales: {
+      x: {
+        grid: { color: 'rgba(42,53,80,0.5)', drawBorder: false },
+        ticks: { color: '#64748b', font: { size: 10, family: 'JetBrains Mono' }, maxTicksLimit: 10, maxRotation: 0 }
+      },
+      y: {
+        grid: { color: 'rgba(42,53,80,0.5)', drawBorder: false },
+        title: { display: true, text: yLabel, color: '#64748b', font: { size: 10, family: 'Inter' } },
+        ticks: { color: '#64748b', font: { size: 10, family: 'JetBrains Mono' }, callback: yFmt }
+      }
+    },
+    ...extra
   };
 }
-const xA=()=>({grid:{display:false},ticks:{color:'#888',font:{size:10,family:'Arial'},maxTicksLimit:10,maxRotation:0}});
-const yA=(l,fmt)=>({
-  grid:{color:'#f0f0f0'},
-  title:{display:true,text:l,color:'#666',font:{size:10,family:'Arial'}},
-  ticks:{color:'#888',font:{size:10,family:'Arial'},callback:fmt||(v=>v.toFixed(2))}
-});
 
-function sl2(m){
-  const s=D.series; if(!m) return s;
-  const c=new Date(s.dates[s.dates.length-1]); c.setMonth(c.getMonth()-m);
-  const i=s.dates.findIndex(d=>new Date(d)>=c);
-  return{dates:s.dates.slice(i),prices:s.prices.slice(i),returns:s.returns.slice(i),vols:s.vols.slice(i),vars:s.vars.slice(i)};
+function sl2(m) {
+  const s = D.series;
+  if (!m) return s;
+  const cut = new Date(s.dates[s.dates.length-1]);
+  cut.setMonth(cut.getMonth() - m);
+  const i = s.dates.findIndex(d => new Date(d) >= cut);
+  return { dates: s.dates.slice(i), prices: s.prices.slice(i), returns: s.returns.slice(i), vols: s.vols.slice(i), vars: s.vars.slice(i) };
 }
-function dc(k){if(C[k]){C[k].destroy();C[k]=null;}}
+function dc(k) { if (C[k]) { C[k].destroy(); C[k] = null; } }
 
-function buildCharts(){
-  const s=sl2(M), vn=D.var_today;
+function buildCharts() {
+  const s = sl2(M), vn = D.var_today;
   dc('px'); dc('vol'); dc('var_'); dc('ret');
   
-  // Cours
-  C.px=new Chart(document.getElementById('cpx'),{type:'line',
-    data:{labels:s.dates,datasets:[{label:'Cours',unit:' €',data:s.prices,borderColor:'#1D9E75',fill:true,backgroundColor:'rgba(29,158,117,.07)',borderWidth:1.5}]},
-    options:{...mkCO(),scales:{x:xA(),y:yA('Prix (€)',v=>v.toFixed(2)+' €')}}});
+  C.px = new Chart(document.getElementById('cpx'), {
+    type: 'line',
+    data: { labels: s.dates, datasets: [{ label: 'Close', suffix: ' €', data: s.prices, borderColor: '#10b981', fill: true, backgroundColor: 'rgba(16,185,129,0.06)', borderWidth: 1.5 }] },
+    options: mkOpts('Price (€)', v => v.toFixed(2) + '€')
+  });
   
-  // Volatilite
-  C.vol=new Chart(document.getElementById('cvol'),{type:'line',
-    data:{labels:s.dates,datasets:[{label:'σt',unit:' %',data:s.vols,borderColor:'#D85A30',fill:true,backgroundColor:'rgba(216,90,48,.08)',borderWidth:1.5}]},
-    options:{...mkCO(),scales:{x:xA(),y:yA('Volatilite (%)',v=>v.toFixed(2)+'%')}}});
+  C.vol = new Chart(document.getElementById('cvol'), {
+    type: 'line',
+    data: { labels: s.dates, datasets: [{ label: 'σₜ', suffix: '%', data: s.vols, borderColor: '#f59e0b', fill: true, backgroundColor: 'rgba(245,158,11,0.06)', borderWidth: 1.5 }] },
+    options: mkOpts('Volatility (%)', v => v.toFixed(2) + '%')
+  });
   
-  // VaR
-  C.var_=new Chart(document.getElementById('cvar'),{type:'line',
-    data:{labels:s.dates,datasets:[
-      {label:'VaR 1%',unit:' %',data:s.vars,borderColor:'#378ADD',fill:true,backgroundColor:'rgba(55,138,221,.07)',borderWidth:1.5},
-      {label:'VaR actuelle',unit:' %',data:s.vars.map(()=>vn),borderColor:'#D85A30',borderDash:[5,3],borderWidth:1.5,fill:false,pointRadius:0}
+  C.var_ = new Chart(document.getElementById('cvar'), {
+    type: 'line',
+    data: { labels: s.dates, datasets: [
+      { label: 'VaR 1%', suffix: '%', data: s.vars, borderColor: '#ef4444', fill: true, backgroundColor: 'rgba(239,68,68,0.06)', borderWidth: 1.5 },
+      { label: 'VaR today', suffix: '%', data: s.vars.map(() => vn), borderColor: '#f87171', borderDash: [5,3], borderWidth: 1.2, fill: false, pointRadius: 0 }
     ]},
-    options:{...mkCO(),scales:{x:xA(),y:yA('VaR (%)',v=>v.toFixed(2)+'%')}}});
+    options: mkOpts('VaR (%)', v => v.toFixed(2) + '%')
+  });
   
-  // Rendements
-  C.ret=new Chart(document.getElementById('cret'),{type:'bar',
-    data:{labels:s.dates,datasets:[{label:'Rt',unit:' %',data:s.returns,
-      backgroundColor:s.returns.map(v=>v>=0?'rgba(29,158,117,.65)':'rgba(216,90,48,.65)'),borderWidth:0}]},
-    options:{...mkCO(),scales:{x:xA(),y:yA('Rendement (%)',v=>v.toFixed(2)+'%')}}});
+  C.ret = new Chart(document.getElementById('cret'), {
+    type: 'bar',
+    data: { labels: s.dates, datasets: [{ label: 'Rₜ', suffix: '%', data: s.returns, backgroundColor: s.returns.map(v => v >= 0 ? 'rgba(16,185,129,0.6)' : 'rgba(239,68,68,0.6)'), borderWidth: 0 }] },
+    options: mkOpts('Return (%)', v => v.toFixed(2) + '%')
+  });
 }
 
-function buildNIC(){
-  const n=D.nic; dc('nic');
-  const s0=D.sig_today;
-  C.nic=new Chart(document.getElementById('cnic'),{type:'line',
-    data:{labels:n.returns.map(r=>r.toFixed(1)+'%'),
-          datasets:[
-            {label:'σt+1',unit:' %',data:n.vols,borderColor:'#57068c',borderWidth:2.5,fill:false,pointRadius:0,tension:.4},
-            {label:'σt actuel',unit:' %',data:n.vols.map(()=>s0),borderColor:'#D85A30',borderDash:[5,3],borderWidth:1.2,fill:false,pointRadius:0}
-          ]},
-    options:{
-      responsive:true,maintainAspectRatio:false,animation:{duration:0},
-      interaction:{mode:'index',intersect:false},
-      plugins:{
-        legend:{display:false},
-        tooltip:{
-          backgroundColor:'rgba(255,255,255,0.97)',
-          titleColor:'#330662',bodyColor:'#333',
-          borderColor:'#ddd',borderWidth:1,
-          titleFont:{family:'Arial',size:11,weight:'bold'},
-          bodyFont:{family:'Arial',size:11},padding:10,
-          callbacks:{
-            title:items=>`Choc : ${items[0]?.label||''}`,
-            label:c=>{
-              const v=c.parsed.y;
-              if(c.datasetIndex===0) return `  Vol. demain : ${v.toFixed(3)} %`;
-              return `  Vol. actuelle : ${v.toFixed(3)} %`;
-            },
-            afterBody:items=>{
-              const v=items[0]?.parsed?.y;
-              const delta=v-s0;
-              return [`  vs Actuel : ${delta>=0?'+':''}${delta.toFixed(3)} %`,
-                      `  σ∞ long terme : ${D.sig_inf.toFixed(3)} %`];
+function buildNIC() {
+  const nic = D.nic, s0 = D.sig_today;
+  dc('nic');
+  C.nic = new Chart(document.getElementById('cnic'), {
+    type: 'line',
+    data: { labels: nic.returns.map(r => r.toFixed(1) + '%'), datasets: [
+      { label: 'σₜ₊₁', suffix: '%', data: nic.vols, borderColor: '#8b5cf6', borderWidth: 2.5, fill: false, pointRadius: 0, tension: 0.4 },
+      { label: 'σₜ now', suffix: '%', data: nic.vols.map(() => s0), borderColor: '#f59e0b', borderDash: [4,3], borderWidth: 1, fill: false, pointRadius: 0 }
+    ]},
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: { duration: 0 },
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: 'rgba(17,24,39,0.97)', titleColor: '#94a3b8', bodyColor: '#f1f5f9',
+          borderColor: '#2a3550', borderWidth: 1,
+          titleFont: { family: 'JetBrains Mono', size: 11 }, bodyFont: { family: 'JetBrains Mono', size: 11 },
+          padding: 12,
+          callbacks: {
+            title: i => `Shock: ${i[0]?.label}`,
+            label: c => c.datasetIndex === 0 ? `  σₜ₊₁: ${c.parsed.y.toFixed(3)}%` : `  Current σₜ: ${c.parsed.y.toFixed(3)}%`,
+            afterBody: i => {
+              const v = i[0]?.parsed?.y, delta = v - s0;
+              return [`  Δ vs now: ${delta >= 0 ? '+' : ''}${delta.toFixed(3)}%`, `  σ∞ LT: ${D.sig_inf.toFixed(3)}%`];
             }
           }
         }
       },
-      elements:{point:{radius:0,hoverRadius:5,hoverBackgroundColor:'#57068c'},line:{tension:.4}},
-      scales:{
-        x:{title:{display:true,text:'Choc εt (%)',color:'#666',font:{size:10,family:'Arial'}},
-           ticks:{color:'#888',font:{size:10,family:'Arial'},maxTicksLimit:9},grid:{color:'#f0f0f0'}},
-        y:{title:{display:true,text:'σt+1 (%)',color:'#666',font:{size:10,family:'Arial'}},
-           ticks:{color:'#888',font:{size:10,family:'Arial'},callback:v=>v.toFixed(2)+'%'},grid:{color:'#f0f0f0'}}
+      elements: { point: { radius: 0, hoverRadius: 4 }, line: { tension: 0.4 } },
+      scales: {
+        x: { grid: { color: 'rgba(42,53,80,0.5)' }, ticks: { color: '#64748b', font: { size: 10, family: 'JetBrains Mono' }, maxTicksLimit: 9 }, title: { display: true, text: 'Shock εₜ (%)', color: '#64748b', font: { size: 10 } } },
+        y: { grid: { color: 'rgba(42,53,80,0.5)' }, ticks: { color: '#64748b', font: { size: 10, family: 'JetBrains Mono' }, callback: v => v.toFixed(2) + '%' }, title: { display: true, text: 'σₜ₊₁ (%)', color: '#64748b', font: { size: 10 } } }
       }
     }
   });
 }
 
-function buildForecast(){
-  const fc=D.forecast; dc('fc');
-  C.fc=new Chart(document.getElementById('cfc'),{type:'line',
-    data:{labels:fc.labels,datasets:[
-      {label:'σt+h prevision',unit:' %',data:fc.vols,borderColor:'#D85A30',borderWidth:2.5,fill:false,pointRadius:5,pointBackgroundColor:'#D85A30',tension:.3},
-      {label:'σ∞ long terme',unit:' %',data:fc.vols.map(()=>D.sig_inf),borderColor:'#888',borderDash:[5,3],borderWidth:1.2,fill:false,pointRadius:0}
+function buildForecast() {
+  const fc = D.forecast;
+  dc('fc');
+  C.fc = new Chart(document.getElementById('cfc'), {
+    type: 'line',
+    data: { labels: fc.labels, datasets: [
+      { label: 'σₜ₊ₕ forecast', suffix: '%', data: fc.vols, borderColor: '#f59e0b', borderWidth: 2.5, fill: false, pointRadius: 5, pointBackgroundColor: '#f59e0b', tension: 0.3 },
+      { label: 'σ∞ long-run', suffix: '%', data: fc.vols.map(() => D.sig_inf), borderColor: '#64748b', borderDash: [5,3], borderWidth: 1.2, fill: false, pointRadius: 0 }
     ]},
-    options:{
-      responsive:true,maintainAspectRatio:false,animation:{duration:0},
-      interaction:{mode:'index',intersect:false},
-      plugins:{
-        legend:{display:false},
-        tooltip:{
-          backgroundColor:'rgba(255,255,255,0.97)',
-          titleColor:'#330662',bodyColor:'#333',
-          borderColor:'#ddd',borderWidth:1,
-          titleFont:{family:'Arial',size:11,weight:'bold'},
-          bodyFont:{family:'Arial',size:11},padding:10,
-          callbacks:{
-            title:items=>`Horizon : ${items[0]?.label||''}`,
-            label:c=>{
-              if(c.datasetIndex===0) return `  Prevision σ : ${c.parsed.y.toFixed(3)} %`;
-              return `  σ∞ long terme : ${c.parsed.y.toFixed(3)} %`;
-            },
-            afterBody:items=>{
-              const v=items[0]?.parsed?.y;
-              const delta=v-D.sig_today;
-              return [`  vs Aujourd'hui (${pc(D.sig_today)}) : ${delta>=0?'+':''}${delta.toFixed(3)} %`];
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: { duration: 0 },
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: 'rgba(17,24,39,0.97)', titleColor: '#94a3b8', bodyColor: '#f1f5f9',
+          borderColor: '#2a3550', borderWidth: 1,
+          titleFont: { family: 'JetBrains Mono', size: 11 }, bodyFont: { family: 'JetBrains Mono', size: 11 },
+          padding: 12,
+          callbacks: {
+            title: i => `Horizon: ${i[0]?.label}`,
+            label: c => c.datasetIndex === 0 ? `  Forecast σ: ${c.parsed.y.toFixed(3)}%` : `  σ∞ long-run: ${c.parsed.y.toFixed(3)}%`,
+            afterBody: i => {
+              const v = i[0]?.parsed?.y, delta = v - D.sig_today;
+              return [`  vs Today (${pc(D.sig_today)}): ${delta >= 0 ? '+' : ''}${delta.toFixed(3)}%`];
             }
           }
         }
       },
-      elements:{point:{radius:5,hoverRadius:7},line:{tension:.3}},
-      scales:{
-        x:{title:{display:true,text:'Horizon de prevision',color:'#666',font:{size:10,family:'Arial'}},
-           ticks:{color:'#888',font:{size:10,family:'Arial'}},grid:{color:'#f0f0f0'}},
-        y:{title:{display:true,text:'σ (%)',color:'#666',font:{size:10,family:'Arial'}},
-           ticks:{color:'#888',font:{size:10,family:'Arial'},callback:v=>v.toFixed(2)+'%'},grid:{color:'#f0f0f0'}}
+      elements: { point: { radius: 5, hoverRadius: 7 }, line: { tension: 0.3 } },
+      scales: {
+        x: { grid: { color: 'rgba(42,53,80,0.5)' }, ticks: { color: '#64748b', font: { size: 10, family: 'JetBrains Mono' } }, title: { display: true, text: 'Forecast horizon', color: '#64748b', font: { size: 10 } } },
+        y: { grid: { color: 'rgba(42,53,80,0.5)' }, ticks: { color: '#64748b', font: { size: 10, family: 'JetBrains Mono' }, callback: v => v.toFixed(2) + '%' }, title: { display: true, text: 'σ (%)', color: '#64748b', font: { size: 10 } } }
       }
     }
   });
 }
 
-// ── Interactions ──────────────────────────────────────────────────────
-function tog(t,btn){
+/* ═══════════════════════════════════════════════════
+   INTERACTIONS
+═══════════════════════════════════════════════════ */
+function tog(t, btn) {
   btn.classList.toggle('on');
-  const m={px:'wpx',vol:'wvol',var:'wvar',ret:'wret'};
-  const el=document.getElementById(m[t]);
-  el.style.display=el.style.display==='none'?'block':'none';
+  const m = { px: 'wpx', vol: 'wvol', var: 'wvar', ret: 'wret' };
+  const el = document.getElementById(m[t]);
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
 }
 
-function setR(m,btn){
-  M=m;
-  document.querySelectorAll('.sc').forEach(b=>b.classList.remove('on'));
+function setR(m, btn) {
+  M = m;
+  document.querySelectorAll('.rng').forEach(b => b.classList.remove('on'));
   btn.classList.add('on');
-  if(!D) return;
-  const s=sl2(m), vn=D.var_today;
-  C.px.data.labels=s.dates; C.px.data.datasets[0].data=s.prices; C.px.update();
-  C.vol.data.labels=s.dates; C.vol.data.datasets[0].data=s.vols; C.vol.update();
-  C.var_.data.labels=s.dates;
-  C.var_.data.datasets[0].data=s.vars;
-  C.var_.data.datasets[1].data=s.vars.map(()=>vn);
+  if (!D) return;
+  const s = sl2(m), vn = D.var_today;
+  C.px.data.labels  = s.dates; C.px.data.datasets[0].data = s.prices; C.px.update();
+  C.vol.data.labels = s.dates; C.vol.data.datasets[0].data = s.vols; C.vol.update();
+  C.var_.data.labels = s.dates;
+  C.var_.data.datasets[0].data = s.vars;
+  C.var_.data.datasets[1].data = s.vars.map(() => vn);
   C.var_.update();
-  C.ret.data.labels=s.dates;
-  C.ret.data.datasets[0].data=s.returns;
-  C.ret.data.datasets[0].backgroundColor=s.returns.map(v=>v>=0?'rgba(29,158,117,.65)':'rgba(216,90,48,.65)');
+  C.ret.data.labels = s.dates;
+  C.ret.data.datasets[0].data = s.returns;
+  C.ret.data.datasets[0].backgroundColor = s.returns.map(v => v >= 0 ? 'rgba(16,185,129,0.6)' : 'rgba(239,68,68,0.6)');
   C.ret.update();
 }
 
-function sw(t){ document.getElementById('tsel').value=t; loadData(); }
+function sw(t) {
+  document.getElementById('tsel').value = t;
+  document.getElementById('pill-cur').textContent = t;
+  document.querySelectorAll('.pill').forEach(p => p.classList.remove('on'));
+  document.getElementById('pill-cur').classList.add('on');
+  loadData();
+}
 
-// ── Helpers ────────────────────────────────────────────────────────────
-function showL(m,st){ set('lmsg',m); set('lstep',st); document.getElementById('ldr').classList.remove('hide'); }
-function hideL(){ document.getElementById('ldr').classList.add('hide'); }
-function showErr(m){ const b=document.getElementById('ebox'); b.style.display='block'; set('emsg',m); }
-function set(id,v){ const e=document.getElementById(id); if(e) e.textContent=v; }
-function pc(v){ return v!=null ? v.toFixed(3)+'%' : '—'; }
-function fd(str){
-  if(!str) return '—';
-  const [y,m,d]=str.split('-');
-  const mo=['janv.','fevr.','mars','avr.','mai','juin','juil.','aout','sept.','oct.','nov.','dec.'];
+/* ═══════════════════════════════════════════════════
+   HELPERS
+═══════════════════════════════════════════════════ */
+function showLoader() { document.getElementById('loader').classList.remove('hide'); }
+function hideLoader() { document.getElementById('loader').classList.add('hide'); }
+function step(s)      { set('lstep', s); }
+function showErr(m)   { const b = document.getElementById('errbox'); b.style.display = 'block'; set('errmsg', m); }
+function set(id, v)   { const e = document.getElementById(id); if (e) e.textContent = v; }
+function setV(id, v)  { const e = document.getElementById(id); if (e) e.textContent = v; }
+function pc(v)        { return v != null ? v.toFixed(3) + '%' : '—'; }
+function fd(s) {
+  if (!s) return '—';
+  const [y, m, d] = s.split('-');
+  const mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   return `${parseInt(d)} ${mo[parseInt(m)-1]} ${y}`;
 }
 
