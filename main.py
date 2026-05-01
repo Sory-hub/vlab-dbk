@@ -21,7 +21,7 @@ app.add_middleware(
 )
 
 CACHE = {}
-CACHE_TTL = 7200  # 2 heures — réduit les appels Yahoo
+CACHE_TTL = 14400  # 2 heures — réduit les appels Yahoo
 
 
 def download_data(ticker: str, start: str = "2021-01-01", retries: int = 4):
@@ -99,19 +99,19 @@ def fit_garch(returns: np.ndarray) -> dict:
     best_ll, best_res = np.inf, None
     
     starts = [
-        [var_emp * 0.05, 0.08,  0.90, 6.0],
-        [var_emp * 0.05, 0.05,  0.93, 5.0],
-        [var_emp * 0.10, 0.10,  0.85, 4.0],
-        [var_emp * 0.03, 0.06,  0.92, 7.0],
-        [var_emp * 0.08, 0.12,  0.82, 5.5],
-        [var_emp * 0.02, 0.04,  0.95, 8.0],
+        [var_emp * 0.05, 0.07,  0.92, 6.0],
+        [var_emp * 0.03, 0.05,  0.94, 5.0],
+        [var_emp * 0.08, 0.08,  0.90, 4.5],
+        [var_emp * 0.04, 0.06,  0.93, 7.0],
+        [var_emp * 0.06, 0.10,  0.88, 5.0],
+        [var_emp * 0.02, 0.04,  0.95, 6.0],
     ]
     
     bounds = [
         (1e-8,  var_emp * 2),  # omega
-        (1e-6,  0.25),         # alpha
-        (0.60,  0.9997),       # beta  — force persistence >= 0.60
-        (2.10,  20.0),         # nu
+        (1e-6,  0.20),         # alpha
+        (0.80,  0.9997),       # beta  — force persistence >= 0.80
+        (2.10,  30.0),         # nu
     ]
     
     for x0 in starts:
