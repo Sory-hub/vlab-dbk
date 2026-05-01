@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 import time
+import random
 from scipy.stats import t as student_t, jarque_bera, skew, kurtosis
 from scipy.optimize import minimize
 from scipy.special import gammaln
@@ -20,119 +21,118 @@ app.add_middleware(
 )
 
 CACHE = {}
-CACHE_TTL = 3600
+CACHE_TTL = 7200  # 2 heures — réduit les appels Yahoo
 
 
-def download_data(ticker: str, start: str = "2021-01-01"):
-    """Télécharge les données et retourne dates, prix, rendements log (%)."""
-    df = yf.download(ticker, start=start, progress=False, auto_adjust=True)
-    if df is None or df.empty:
-        raise ValueError(f"Aucune donnee pour {ticker}")
+def download_data(ticker: str, start: str = "2021-01-01", retries: int = 4):
+    """Télécharge avec retry exponentiel si rate-limited."""
+    last_err = None
+    for attempt in range(retries):
+        try:
+            if attempt > 0:
+                wait = (2 ** attempt) + random.uniform(1, 3)
+                time.sleep(wait)
+            
+            df = yf.download(
+                ticker,
+                start=start,
+                progress=False,
+                auto_adjust=True,
+                timeout=30,
+            )
+            if df is None or df.empty:
+                raise ValueError(f"No data returned for {ticker}")
+            
+            # Extraire Close de manière robuste
+            if "Close" not in df.columns:
+                raise ValueError("No Close column in data")
+            
+            close = df["Close"]
+            if isinstance(close, pd.DataFrame):
+                close = close.iloc[:, 0]
+            close = close.squeeze().dropna().astype(float)
+            
+            if len(close) < 100:
+                raise ValueError(f"Not enough data: {len(close)} rows")
+            
+            dates  = [str(d.date()) for d in close.index]
+            prices = [round(float(v), 2) for v in close.values]
+            vals   = close.values.astype(float)
+            rets   = np.log(vals[1:] / vals[:-1]) * 100.0
+            rets   = np.array([round(float(r), 6) for r in rets])
+            
+            return dates, prices, rets
+        
+        except Exception as e:
+            last_err = e
+            if "Rate" in str(e) or "429" in str(e) or "Too Many" in str(e):
+                continue
+            raise
     
-    # ── Extraire la colonne Close de manière robuste ──────────────────
-    if isinstance(df.columns, pd.MultiIndex) if hasattr(df.columns, "levels") else False:
-        close = df["Close"][ticker]
-    else:
-        close = df["Close"]
-    
-    # Aplatir si nécessaire
-    if hasattr(close, "squeeze"):
-        close = close.squeeze()
-    close = close.dropna()
-    close = close.astype(float)
-    
-    n = len(close)
-    if n < 50:
-        raise ValueError(f"Pas assez de donnees ({n} observations)")
-    
-    dates  = [str(d.date()) for d in close.index]
-    prices = [round(float(v), 2) for v in close.values]
-    
-    # Rendements log en %
-    vals = close.values.astype(float)
-    rets = np.log(vals[1:] / vals[:-1]) * 100.0
-    rets = np.array([round(float(r), 6) for r in rets])
-    
-    return dates, prices, rets
+    raise RuntimeError(f"Failed after {retries} attempts: {last_err}")
 
 
-def garch11_student_loglik(params, eps):
-    """Log-vraisemblance négative GARCH(1,1) Student."""
+def garch11_loglik(params, eps):
     omega, alpha, beta, nu = (float(p) for p in params)
+    if omega <= 0 or alpha <= 0 or beta <= 0: return 1e12
+    if alpha + beta >= 0.9999: return 1e12
+    if nu <= 2.01: return 1e12
     
-    # Contraintes
-    if omega <= 0 or alpha <= 0 or beta <= 0:
-        return 1e12
-    if alpha + beta >= 0.9999:
-        return 1e12
-    if nu <= 2.01:
-        return 1e12
-    
-    # Constante log-vraisemblance Student
-    log_c = (gammaln((nu + 1) / 2)
-             - gammaln(nu / 2)
-             - 0.5 * np.log(np.pi * (nu - 2)))
-    
-    # Variance inconditionnelle comme point de départ
-    sig2 = omega / (1.0 - alpha - beta)
-    ll = 0.0
+    log_c = (gammaln((nu+1)/2) - gammaln(nu/2) - 0.5*np.log(np.pi*(nu-2)))
+    sig2  = omega / (1.0 - alpha - beta)
+    ll    = 0.0
     
     for e in eps:
-        sig2 = omega + alpha * e * e + beta * sig2
-        if sig2 <= 0:
-            return 1e12
-        ll += log_c - 0.5 * np.log(sig2) - ((nu + 1) / 2) * np.log(
-            1.0 + e * e / (sig2 * (nu - 2))
-        )
+        sig2 = omega + alpha*e*e + beta*sig2
+        if sig2 <= 1e-12: return 1e12
+        ll += log_c - 0.5*np.log(sig2) - ((nu+1)/2)*np.log(1.0 + e*e/(sig2*(nu-2)))
     return -ll
 
 
-def fit_garch11_student(returns: np.ndarray) -> dict:
-    """Estime GARCH(1,1) Student par MLE avec plusieurs points de départ."""
+def fit_garch(returns: np.ndarray) -> dict:
     mu  = float(returns.mean())
-    eps = returns - mu
+    eps = (returns - mu).astype(float)
     
-    best_ll  = np.inf
-    best_res = None
+    # Variance empirique pour initialiser omega
+    var_emp = float(eps.var())
     
-    # Plusieurs points de départ pour éviter les minima locaux
+    best_ll, best_res = np.inf, None
+    
     starts = [
-        [0.10, 0.05, 0.93, 5.0],
-        [0.05, 0.08, 0.90, 6.0],
-        [0.15, 0.10, 0.85, 4.0],
-        [0.08, 0.06, 0.92, 7.0],
-        [0.20, 0.12, 0.82, 5.5],
+        [var_emp * 0.05, 0.08,  0.90, 6.0],
+        [var_emp * 0.05, 0.05,  0.93, 5.0],
+        [var_emp * 0.10, 0.10,  0.85, 4.0],
+        [var_emp * 0.03, 0.06,  0.92, 7.0],
+        [var_emp * 0.08, 0.12,  0.82, 5.5],
+        [var_emp * 0.02, 0.04,  0.95, 8.0],
     ]
     
     bounds = [
-        (1e-6, 5.0),    # omega
-        (1e-6, 0.30),   # alpha
-        (0.50, 0.9998), # beta  — force la persistance réaliste
-        (2.10, 25.0),   # nu
+        (1e-8,  var_emp * 2),  # omega
+        (1e-6,  0.25),         # alpha
+        (0.60,  0.9997),       # beta  — force persistence >= 0.60
+        (2.10,  20.0),         # nu
     ]
     
     for x0 in starts:
         try:
             res = minimize(
-                garch11_student_loglik,
-                x0,
-                args=(eps,),
-                method="L-BFGS-B",
-                bounds=bounds,
-                options={"maxiter": 2000, "ftol": 1e-12, "gtol": 1e-8},
+                garch11_loglik, x0, args=(eps,),
+                method="L-BFGS-B", bounds=bounds,
+                options={"maxiter": 3000, "ftol": 1e-13, "gtol": 1e-9},
             )
-            if res.success and res.fun < best_ll:
+            if res.fun < best_ll:
                 best_ll  = res.fun
                 best_res = res
         except Exception:
             continue
     
     if best_res is None:
-        raise RuntimeError("Echec de l optimisation GARCH")
+        raise RuntimeError("GARCH optimization failed")
     
     omega, alpha, beta, nu = (float(x) for x in best_res.x)
     loglik = float(-best_res.fun)
-    n, k   = len(eps), 5  # omega, alpha, beta, nu, mu
+    n, k   = len(eps), 5
     
     return {
         "omega":    round(omega, 6),
@@ -141,200 +141,133 @@ def fit_garch11_student(returns: np.ndarray) -> dict:
         "nu":       round(nu,    4),
         "mu":       round(mu,    6),
         "loglik":   round(loglik, 3),
-        "aic":      round(2 * k - 2 * loglik, 3),
-        "bic":      round(k * float(np.log(n)) - 2 * loglik, 3),
+        "aic":      round(2*k - 2*loglik, 3),
+        "bic":      round(k*float(np.log(n)) - 2*loglik, 3),
         "converged": bool(best_res.success),
     }
 
 
-def compute_conditional_series(returns: np.ndarray, params: dict):
-    """Calcule la série des volatilités conditionnelles et des VaR."""
-    omega = params["omega"]
-    alpha = params["alpha"]
-    beta  = params["beta"]
-    nu    = params["nu"]
-    mu    = params["mu"]
-    
-    q01 = float(student_t.ppf(0.01, df=nu))
-    
-    sig2 = omega / (1.0 - alpha - beta)
-    eps  = returns - mu
-    
+def compute_series(returns, params):
+    w, a, b = params["omega"], params["alpha"], params["beta"]
+    nu, mu  = params["nu"], params["mu"]
+    q01  = float(student_t.ppf(0.01, df=nu))
+    sig2 = w / (1.0 - a - b)
     vols, vars_ = [], []
-    for e in eps:
-        sig2 = omega + alpha * float(e) ** 2 + beta * sig2
-        sig2 = max(sig2, 1e-10)
+    for e in (returns - mu).astype(float):
+        sig2 = max(w + a*e*e + b*sig2, 1e-12)
         s    = float(np.sqrt(sig2))
-        VaR  = float(-(mu + s * q01))
         vols.append(round(s, 6))
-        vars_.append(round(VaR, 6))
-    
+        vars_.append(round(float(-(mu + s*q01)), 6))
     return vols, vars_, float(q01)
 
 
-def volatility_term_structure(sig0: float, params: dict, horizons: list) -> list:
-    """Term structure de la volatilité (retour vers la moyenne)."""
-    omega = params["omega"]
-    alpha = params["alpha"]
-    beta  = params["beta"]
-    sig_inf = float(np.sqrt(omega / (1.0 - alpha - beta)))
-    result  = []
+def term_structure(s0, params, horizons):
+    w, a, b = params["omega"], params["alpha"], params["beta"]
+    si = float(np.sqrt(w/(1-a-b)))
+    out = []
     for h in horizons:
         if h == 0:
-            result.append(round(sig0, 6))
+            out.append(round(float(s0), 6))
         else:
-            v = float(np.sqrt(
-                sig_inf ** 2 + (alpha + beta) ** h * (sig0 ** 2 - sig_inf ** 2)
-            ))
-            result.append(round(v, 6))
-    return result
+            v = float(np.sqrt(si**2 + (a+b)**h * (s0**2 - si**2)))
+            out.append(round(v, 6))
+    return out
 
 
-def news_impact_curve(params: dict, sig0: float, n_points: int = 200) -> dict:
-    """News Impact Curve : σ_{t+1} en fonction de ε_t."""
-    omega = params["omega"]
-    alpha = params["alpha"]
-    beta  = params["beta"]
-    sig2_0 = sig0 ** 2
-    
-    xs = np.linspace(-10.0, 10.0, n_points)
-    ys = [round(float(np.sqrt(omega + alpha * float(r) ** 2 + beta * sig2_0)), 6)
-          for r in xs]
-    return {
-        "returns": [round(float(x), 3) for x in xs],
-        "vols":    ys,
-    }
+def nic(params, s0):
+    w, a, b = params["omega"], params["alpha"], params["beta"]
+    xs = np.linspace(-10, 10, 200)
+    ys = [round(float(np.sqrt(w + a*float(r)**2 + b*s0**2)), 6) for r in xs]
+    return {"returns": [round(float(x), 3) for x in xs], "vols": ys}
 
-
-# ── Routes ─────────────────────────────────────────────────────────────
 
 @app.get("/")
-def root():
-    return {"message": "V-Lab Volatility API — OK", "docs": "/docs"}
-
+def root(): return {"message": "V-Lab API OK", "docs": "/docs"}
 
 @app.get("/api/health")
-def health():
-    return {"status": "ok", "time": datetime.utcnow().isoformat() + "Z"}
+def health(): return {"status": "ok", "time": datetime.utcnow().isoformat()}
 
 
 @app.get("/api/volatility/{ticker}")
-def get_volatility(
-    ticker: str,
-    start:  str  = Query("2021-01-01", description="Date de debut YYYY-MM-DD"),
-    refit:  bool = Query(False,        description="Forcer la ré-estimation"),
-):
-    cache_key = f"{ticker}|{start}"
-    now       = time.time()
+def get_vol(ticker: str,
+            start:  str  = Query("2021-01-01"),
+            refit:  bool = Query(False)):
     
-    # Retourner le cache si valide
-    if not refit and cache_key in CACHE:
-        cached_at, data = CACHE[cache_key]
-        if now - cached_at < CACHE_TTL:
+    key = f"{ticker}|{start}"
+    now = time.time()
+    
+    if not refit and key in CACHE:
+        t0, data = CACHE[key]
+        if now - t0 < CACHE_TTL:
             return JSONResponse(content=data)
     
     try:
-        # 1. Données
-        dates, prices, returns = download_data(ticker, start)
-        n = len(returns)
+        dates, prices, R = download_data(ticker, start)
+        n = len(R)
         
-        # 2. Estimation GARCH
-        params = fit_garch11_student(returns)
+        params = fit_garch(R)
+        vols, vars_, q01 = compute_series(R, params)
         
-        # 3. Séries conditionnelles
-        vols, vars_, q01 = compute_conditional_series(returns, params)
+        s0  = float(vols[-1])
+        v0  = float(vars_[-1])
+        per = round(float(params["alpha"] + params["beta"]), 4)
+        si  = round(float(np.sqrt(params["omega"]/(1-per))), 4)
+        hl  = round(float(np.log(0.5)/np.log(per)), 1) if per < 1 else 999
         
-        sig_today = float(vols[-1])
-        var_today = float(vars_[-1])
-        per       = round(float(params["alpha"] + params["beta"]), 4)
-        sig_inf   = round(float(np.sqrt(params["omega"] / (1.0 - per))), 4)
-        halflife  = round(float(np.log(0.5) / np.log(per)), 1) if per < 1 else 999
+        hz  = [0, 1, 5, 10, 22, 66, 132, 252]
+        lb  = ["Auj.","1j","1s","10j","1m","3m","6m","1a"]
         
-        # 4. Term structure
-        horizons = [0, 1, 5, 10, 22, 66, 132, 252]
-        labels   = ["Auj.", "1j", "1s", "10j", "1m", "3m", "6m", "1a"]
-        forecast = volatility_term_structure(sig_today, params, horizons)
+        jbs, jbp = jarque_bera(R)
         
-        # 5. NIC
-        nic = news_impact_curve(params, sig_today)
+        vc = {str(c): round(float(c)*abs(v0)/100, 2)
+              for c in [10000, 50000, 100000, 500000, 1000000]}
         
-        # 6. Stats descriptives
-        jb_stat, jb_p = jarque_bera(returns)
-        
-        # 7. VaR par capital
-        var_by_capital = {
-            str(c): round(float(c) * abs(var_today) / 100.0, 2)
-            for c in [10_000, 50_000, 100_000, 500_000, 1_000_000]
-        }
-        
-        # 8. Séries allégées (tout garder sur 2 ans, 1/3 avant)
+        # Alléger les séries
         cutoff = (date.today() - timedelta(days=730)).isoformat()
-        idx2y  = next(
-            (i for i, d in enumerate(dates[1:]) if d >= cutoff), 0
-        )
-        keep = sorted(
-            set(list(range(0, max(idx2y, 1), 3)) + list(range(idx2y, n)))
-        )
+        idx2y  = next((i for i,d in enumerate(dates[1:]) if d >= cutoff), 0)
+        keep   = sorted(set(list(range(0, max(idx2y,1), 3)) + list(range(idx2y, n))))
         
-        def thin(lst, offset=0):
-            return [float(lst[i + offset])
-                    for i in keep if i + offset < len(lst)]
+        def th(lst, off=0):
+            return [float(lst[i+off]) for i in keep if i+off < len(lst)]
         
         result = {
             "ticker":      ticker,
             "last_date":   dates[-1],
             "last_price":  float(prices[-1]),
-            "n_obs":       int(n + 1),
+            "n_obs":       int(n+1),
             "start_date":  dates[0],
-            
-            # Paramètres
             "params":      params,
-            "q01":         round(float(q01), 4),
-            "sig_inf":     sig_inf,
-            "halflife":    halflife,
+            "q01":         round(q01, 4),
+            "sig_inf":     si,
+            "halflife":    hl,
             "persistence": per,
-            
-            # Résultats clés
-            "sig_today":   round(sig_today, 4),
-            "var_today":   round(var_today, 4),
-            "ann_vol":     round(float(returns.std() * np.sqrt(252)), 2),
-            "var_by_capital": var_by_capital,
-            
-            # Term structure
-            "forecast": {
-                "horizons": horizons,
-                "labels":   labels,
-                "vols":     forecast,
-            },
-            
-            # NIC
-            "nic": nic,
-            
-            # Séries temporelles
+            "sig_today":   round(s0, 4),
+            "var_today":   round(v0, 4),
+            "ann_vol":     round(float(R.std()*np.sqrt(252)), 2),
+            "var_by_capital": vc,
+            "forecast":    {"horizons": hz, "labels": lb, "vols": term_structure(s0, params, hz)},
+            "nic":         nic(params, s0),
             "series": {
-                "dates":   [dates[i + 1] for i in keep if i + 1 < len(dates)],
-                "prices":  thin(prices, 1),
-                "returns": [float(returns[i]) for i in keep if i < n],
-                "vols":    thin(vols),
-                "vars":    thin(vars_),
+                "dates":   [dates[i+1] for i in keep if i+1 < len(dates)],
+                "prices":  th(prices, 1),
+                "returns": [float(R[i]) for i in keep if i < n],
+                "vols":    th(vols),
+                "vars":    th(vars_),
             },
-            
-            # Stats descriptives
             "stats": {
-                "mean":     round(float(returns.mean()), 6),
-                "std":      round(float(returns.std()), 6),
-                "skewness": round(float(skew(returns)), 4),
-                "kurtosis": round(float(kurtosis(returns)), 4),
-                "jb_stat":  round(float(jb_stat), 1),
-                "jb_p":     round(float(jb_p), 6),
-                "min":      round(float(returns.min()), 4),
-                "max":      round(float(returns.max()), 4),
+                "mean":     round(float(R.mean()), 6),
+                "std":      round(float(R.std()), 6),
+                "skewness": round(float(skew(R)), 4),
+                "kurtosis": round(float(kurtosis(R)), 4),
+                "jb_stat":  round(float(jbs), 1),
+                "jb_p":     round(float(jbp), 6),
+                "min":      round(float(R.min()), 4),
+                "max":      round(float(R.max()), 4),
             },
-            
             "updated_at": datetime.utcnow().isoformat() + "Z",
         }
         
-        CACHE[cache_key] = (now, result)
+        CACHE[key] = (now, result)
         return JSONResponse(content=result)
     
     except Exception as exc:
