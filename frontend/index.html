@@ -533,9 +533,9 @@ body{
   <div class="two-col">
     <div class="sub-panel">
       <h3>News Impact Curve</h3>
-      <p>Effect of shock εₜ on tomorrow's volatility σₜ₊₁</p>
+      <p>GARCH symétrique (violet) vs GJR-GARCH asymétrique (rouge)</p>
       <div style="position:relative;height:210px"><canvas id="cnic"></canvas></div>
-      <div class="panel-note">Symmetric U-shape (γ=0). GJR-GARCH would add leverage effect asymmetry.</div>
+      <div class="panel-note" id="nic-note">GARCH : U symétrique · GJR-GARCH : asymétrie γ > 0 → chocs négatifs créent plus de volatilité</div>
     </div>
     <div class="sub-panel">
       <h3>Volatility Term Structure</h3>
@@ -855,13 +855,29 @@ function buildCharts() {
 
 function buildNIC() {
   const nic = D.nic, s0 = D.sig_today;
+  const nicGJR = D.nic_gjr;
   dc('nic');
+  
+  // Datasets : GARCH symetrique + GJR asymetrique si dispo
+  const datasets = [
+    { label: 'GARCH(1,1) symétrique', suffix: '%', data: nic.vols,
+      borderColor: '#8b5cf6', borderWidth: 2, fill: false, pointRadius: 0, tension: 0.4,
+      borderDash: [5,3] },
+  ];
+  if (nicGJR) {
+    datasets.push({
+      label: 'GJR-GARCH asymétrique', suffix: '%', data: nicGJR.vols,
+      borderColor: '#ef4444', borderWidth: 2.5, fill: false, pointRadius: 0, tension: 0.4
+    });
+  }
+  datasets.push({
+    label: 'σₜ actuel', suffix: '%', data: nic.vols.map(() => s0),
+    borderColor: '#f59e0b', borderDash: [4,3], borderWidth: 1, fill: false, pointRadius: 0
+  });
+  
   C.nic = new Chart(document.getElementById('cnic'), {
     type: 'line',
-    data: { labels: nic.returns.map(r => r.toFixed(1) + '%'), datasets: [
-      { label: 'σₜ₊₁', suffix: '%', data: nic.vols, borderColor: '#8b5cf6', borderWidth: 2.5, fill: false, pointRadius: 0, tension: 0.4 },
-      { label: 'σₜ now', suffix: '%', data: nic.vols.map(() => s0), borderColor: '#f59e0b', borderDash: [4,3], borderWidth: 1, fill: false, pointRadius: 0 }
-    ]},
+    data: { labels: nic.returns.map(r => r.toFixed(1) + '%'), datasets },
     options: {
       responsive: true, maintainAspectRatio: false, animation: { duration: 0 },
       interaction: { mode: 'index', intersect: false },
